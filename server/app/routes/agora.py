@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.db.couchbase import get_collection
+from app.services.ai_agent import SYSTEM_PROMPT
 
 router = APIRouter(prefix="/agora", tags=["agora"])
 
@@ -270,6 +271,11 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             "params": {
                 "voice": (req.tts_voice or settings.agora_convo_default_tts_voice),
             }
+        },
+        "llm": {
+            "system_messages": [
+                {"role": "system", "content": SYSTEM_PROMPT}
+            ],
         },
     }
 

@@ -135,7 +135,7 @@ export default function AgentPage() {
 
   const [channelName, setChannelName] = useState(() => generateDefaultChannelName());
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
-  const [voice, setVoice] = useState("coral");
+  const [voice, setVoice] = useState("alloy");
   const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
 
   const [agentId, setAgentId] = useState("");

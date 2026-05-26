@@ -2,7 +2,7 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.models.conversation import TranscriptEntry
 
-SYSTEM_PROMPT = """You are Workflow PH Sales Agent, a real-time AI sales qualification agent for Philippine service businesses.
+SYSTEM_PROMPT = """You are Workflow PH Sales Agent, a real-time AI sales qualification agent for Philippine service businesses. You are powered by GPT-4o mini.
 
 Your job is to hold a natural sales conversation while moving the lead toward a clear business outcome.
 
