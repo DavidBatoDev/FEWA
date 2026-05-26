@@ -139,3 +139,47 @@ Return only valid JSON, no explanation."""
     import json
     text = response.choices[0].message.content or "{}"
     return json.loads(text)
+
+
+def _offline_summary(transcript: list[TranscriptEntry]) -> str:
+    user_messages = [entry.message.strip() for entry in transcript if entry.role == "user" and entry.message.strip()]
+
+    if not user_messages:
+        return "Conversation ended before enough details were captured."
+
+    first_user = user_messages[0] if user_messages else "Lead shared initial context."
+    latest_user = user_messages[-1] if user_messages else None
+    if latest_user and latest_user != first_user:
+        return f"The lead shared key needs: {first_user} Latest update from the lead: {latest_user}"
+    return f"The lead shared key needs: {first_user}"
+
+
+async def generate_conversation_summary(transcript: list[TranscriptEntry]) -> str:
+    fallback_summary = _offline_summary(transcript)
+    if not _has_openai_key():
+        return fallback_summary
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    conversation_text = "\n".join(f"{e.role.upper()}: {e.message}" for e in transcript)
+    if not conversation_text.strip():
+        return fallback_summary
+
+    prompt = f"""Summarize this sales conversation in 1-2 concise sentences for a human sales teammate.
+Include core business need, urgency or readiness signals, and any notable concern if present.
+
+Transcript:
+{conversation_text}
+
+Return plain text only."""
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=120,
+        )
+        summary = (response.choices[0].message.content or "").strip()
+        return summary or fallback_summary
+    except Exception:
+        return fallback_summary

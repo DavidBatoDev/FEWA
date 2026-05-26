@@ -2,10 +2,10 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from couchbase.exceptions import CouchbaseException
+from couchbase.exceptions import CouchbaseException, DocumentNotFoundException
 from app.models.lead import Lead
 from app.models.conversation import Conversation, TranscriptEntry
-from app.services.ai_agent import get_agent_response, extract_lead_profile
+from app.services.ai_agent import get_agent_response, extract_lead_profile, generate_conversation_summary
 from app.services.lead_scorer import score_lead
 from app.services.offer_recommender import recommend_offer
 from app.db.couchbase import get_collection
@@ -137,7 +137,32 @@ async def end_conversation(req: EndRequest):
         follow_ups_col = get_collection("follow_ups")
 
         lead_result = leads_col.get(req.lead_id)
+        conversation_result = conversations_col.get(req.conversation_id)
         lead = Lead(**lead_result.content_as[dict])
+        conversation = Conversation(**conversation_result.content_as[dict])
+
+        if conversation.lead_id != req.lead_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Conversation does not belong to the specified lead",
+            )
+
+        extracted = await extract_lead_profile(conversation.transcript)
+        summary = await generate_conversation_summary(conversation.transcript)
+
+        objections = extracted.get("objections", [])
+        buying_signals = extracted.get("buying_signals", [])
+        conversation.summary = summary
+        conversation.objections = objections if isinstance(objections, list) else []
+        conversation.buying_signals = buying_signals if isinstance(buying_signals, list) else []
+        conversation.updated_at = ts
+
+        buying_intent = extracted.get("buying_intent")
+        if buying_intent:
+            lead.buying_intent = buying_intent
+        lead.conversation_summary = summary
+        lead.objections = conversation.objections
+        lead.buying_signals = conversation.buying_signals
         lead.status = "qualified"
         lead.updated_at = ts
 
@@ -153,13 +178,22 @@ async def end_conversation(req: EndRequest):
         }
 
         leads_col.replace(req.lead_id, lead.model_dump())
+        conversations_col.replace(req.conversation_id, conversation.model_dump())
         follow_ups_col.insert(follow_up_id, follow_up_doc)
+
+        conversation_payload = conversation.model_dump()
+        conversation_payload["id"] = req.conversation_id
+        follow_up_payload = dict(follow_up_doc)
+        follow_up_payload["id"] = follow_up_id
 
         return {
             "lead": lead.model_dump(),
-            "follow_up": follow_up_doc,
+            "conversation": conversation_payload,
+            "follow_up": follow_up_payload,
             "follow_up_id": follow_up_id,
         }
+    except DocumentNotFoundException:
+        raise HTTPException(status_code=404, detail="Lead or conversation not found")
     except CouchbaseException as exc:
         raise HTTPException(status_code=503, detail=f"Couchbase error: {exc}") from exc
     except Exception as exc:

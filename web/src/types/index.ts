@@ -15,6 +15,9 @@ export interface Lead {
   budget_readiness: string | null;
   decision_maker: string | null;
   buying_intent: string | null;
+  conversation_summary: string | null;
+  objections: string[];
+  buying_signals: string[];
   lead_score: number;
   lead_temperature: LeadTemperature | null;
   recommended_offer: string | null;

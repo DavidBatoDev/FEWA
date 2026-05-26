@@ -20,6 +20,9 @@ class Lead(BaseModel):
     budget_readiness: Optional[str] = None
     decision_maker: Optional[str] = None
     buying_intent: Optional[str] = None
+    conversation_summary: Optional[str] = None
+    objections: list[str] = []
+    buying_signals: list[str] = []
     lead_score: int = 0
     lead_temperature: Optional[LeadTemperature] = None
     recommended_offer: Optional[str] = None

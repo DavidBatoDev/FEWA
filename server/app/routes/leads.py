@@ -25,8 +25,6 @@ async def list_leads():
 @router.get("/{lead_id}")
 async def get_lead(lead_id: str):
     leads_col = get_collection("leads")
-    conversations_col = get_collection("conversations")
-    follow_ups_col = get_collection("follow_ups")
 
     try:
         lead_result = leads_col.get(lead_id)
@@ -35,19 +33,36 @@ async def get_lead(lead_id: str):
     except Exception:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    lead["conversation"] = None
+    lead["follow_up"] = None
+
     scope = get_scope()
 
-    conv_query = f"SELECT META().id, * FROM `conversations` WHERE lead_id = $lead_id LIMIT 1"
+    conv_query = """
+    SELECT META(c).id AS id, c.*
+    FROM `conversations` AS c
+    USE INDEX (idx_conversations_lead_latest USING GSI)
+    WHERE c.lead_id = $lead_id
+    ORDER BY c.updated_at DESC, c.created_at DESC
+    LIMIT 1
+    """
     conv_rows = list(scope.query(conv_query, named_parameters={"lead_id": lead_id}))
     if conv_rows:
-        conv = conv_rows[0].get("conversations", conv_rows[0])
+        conv = {k: v for k, v in conv_rows[0].items() if k != "id"}
         conv["id"] = conv_rows[0].get("id", "")
         lead["conversation"] = conv
 
-    fu_query = f"SELECT META().id, * FROM `follow_ups` WHERE lead_id = $lead_id LIMIT 1"
+    fu_query = """
+    SELECT META(f).id AS id, f.*
+    FROM `follow_ups` AS f
+    USE INDEX (idx_followups_lead_latest USING GSI)
+    WHERE f.lead_id = $lead_id
+    ORDER BY f.created_at DESC
+    LIMIT 1
+    """
     fu_rows = list(scope.query(fu_query, named_parameters={"lead_id": lead_id}))
     if fu_rows:
-        fu = fu_rows[0].get("follow_ups", fu_rows[0])
+        fu = {k: v for k, v in fu_rows[0].items() if k != "id"}
         fu["id"] = fu_rows[0].get("id", "")
         lead["follow_up"] = fu
 
