@@ -3,8 +3,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 .venv/
+.venv*/
 venv/
 env/
+server/.venv312/
 *.egg-info/
 dist/
 build/
