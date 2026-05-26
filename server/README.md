@@ -118,111 +118,93 @@ Validation:
 
 ## Agora Conversational AI endpoints
 
-### Start agent
+### Canonical CAE API (docs-shaped)
 
-`POST /agora/convo/start`
+These are the primary backend contracts aligned to Agora REST operations:
 
-Sample request:
+- `POST /agora/cae/join`
+- `POST /agora/cae/leave`
+- `POST /agora/cae/update`
+- `POST /agora/cae/think`
+- `POST /agora/cae/speak`
+- `POST /agora/cae/interrupt`
+- `POST /agora/cae/query` (maps to upstream `GET /agents/{agentId}`)
+- `POST /agora/cae/history`
+- `POST /agora/cae/status` (status alias for compatibility)
 
-```json
-{
-  "channel_name": "workflow-ph-cae",
-  "user_uid": "1002",
-  "agent_uid": "1001",
-  "tts_voice": "coral"
-}
-```
+Behavior details:
+- `leave` accepts successful empty upstream body.
+- `update` accepts generic `properties` payload.
+- `update` accepts generic `properties` payload (nullable/object per Agora docs).
+- `think` requires `text`; supports `on_listening_action`, `on_thinking_action`, `on_speaking_action`, `interruptable`, `metadata`.
+- `speak` requires `text`; supports `priority` (`INTERRUPT|APPEND|IGNORE`) and `interruptable`.
+- `query` returns agent status (`IDLE|STARTING|RUNNING|STOPPING|STOPPED|FAILED`).
 
-Notes:
-- This backend starts CAE in RTM transcript mode:
-  - `advanced_features.enable_rtm = true`
-  - `parameters.data_channel = "rtm"`
-- If `AGORA_CONVO_DEFAULT_PIPELINE_ID` is set, that pipeline is used.
-- If `AGORA_CONVO_DEFAULT_PIPELINE_ID` is empty, backend falls back to:
-  - `AGORA_CONVO_DEFAULT_PRESET=openai_gpt_4o_mini,openai_tts_1`
+Additional helper endpoint:
 
-### Stop agent
+- `POST /agora/cae/turns` (maps to upstream `GET /agents/{agentId}/turns`, supports `page_index/page_size`).
 
-`POST /agora/convo/stop`
+### Compatibility wrappers (existing UI-safe)
 
-Sample request:
+Existing routes remain active and map to canonical handlers:
 
-```json
-{
-  "agent_id": "A44CR42VE76PA54CK56RD54HW76JR92F",
-  "channel_name": "workflow-ph-cae",
-  "agent_uid": "1001"
-}
-```
+- `POST /agora/convo/start` -> `/agora/cae/join`
+- `POST /agora/convo/stop` -> `/agora/cae/leave`
+- `POST /agora/convo/interrupt` -> `/agora/cae/interrupt`
+- `POST /agora/convo/history` -> `/agora/cae/history`
+- `POST /agora/convo/query` -> `/agora/cae/turns`
+- `POST /agora/convo/speak` -> `/agora/cae/speak`
+- `POST /agora/convo/think` -> `/agora/cae/think`
+- `POST /agora/convo/update` -> `/agora/cae/update`
 
-### Interrupt agent (docs-aligned)
+### Join payload alignment notes
 
-`POST /agora/convo/interrupt`
+`/agora/convo/start` and `/agora/cae/join` include these required join properties:
 
-Sample request:
+- `channel`
+- `token`
+- `agent_rtc_uid`
+- `remote_rtc_uids`
+- `enable_string_uid`
+- `idle_timeout`
 
-```json
-{
-  "agent_id": "A44CR42VE76PA54CK56RD54HW76JR92F",
-  "channel_name": "workflow-ph-cae",
-  "agent_uid": "1001"
-}
-```
+RTM transcript prerequisites are enabled by default:
 
-This calls Agora CAE interrupt endpoint so the agent immediately stops speaking/thinking.
+- `advanced_features.enable_rtm = true`
+- `parameters.data_channel = "rtm"`
+- `parameters.enable_metrics = true`
+- `parameters.enable_error_message = true`
 
-### Retrieve history (short-term memory source)
+Interruption and turn detection alignment:
 
-`POST /agora/convo/history`
+- Uses top-level `interruption` config.
+- Uses `turn_detection` for SoS/EoS behavior only.
+- Uses `audio_scenario` default `aiserver` (override via `AGORA_CONVO_DEFAULT_AUDIO_SCENARIO`).
 
-Sample request:
+Pipeline precedence:
 
-```json
-{
-  "agent_id": "A44CR42VE76PA54CK56RD54HW76JR92F",
-  "channel_name": "workflow-ph-cae",
-  "agent_uid": "1001"
-}
-```
+- If `pipeline_id` is provided (request or `AGORA_CONVO_DEFAULT_PIPELINE_ID`), it is used.
+- Otherwise backend falls back to `preset` (`AGORA_CONVO_DEFAULT_PRESET`).
 
-### Save short-term memory snapshot
+### Extension APIs (app-specific)
 
-`POST /agora/convo/memory/save`
+These are intentionally non-Agora extension endpoints:
 
-Sample request:
+- `POST /agora/convo/memory/save`
+- `POST /agora/convo/memory/inject`
 
-```json
-{
-  "agent_id": "A44CR42VE76PA54CK56RD54HW76JR92F",
-  "channel_name": "workflow-ph-cae",
-  "agent_uid": "1001",
-  "user_uid": "1002"
-}
-```
+They persist and inject short-term conversation memory using Couchbase and `update` (`llm.system_messages`).
 
-Behavior:
-- Retrieves live CAE history.
-- Creates summary.
-- Persists latest + snapshot docs to Couchbase `conversations` collection.
+### Docs Alignment Matrix
 
-### Inject saved memory into running agent
-
-`POST /agora/convo/memory/inject`
-
-Sample request:
-
-```json
-{
-  "agent_id": "A44CR42VE76PA54CK56RD54HW76JR92F",
-  "channel_name": "workflow-ph-cae",
-  "agent_uid": "1001",
-  "user_uid": "1002"
-}
-```
-
-Behavior:
-- Loads saved memory summary for this channel/user.
-- Updates running agent with `properties.llm.system_messages` (Agora update-agent pattern).
+- Official CAE REST operations implemented:
+  - `join`, `leave`, `update`, `think`, `speak`, `interrupt`, `query`, `history`
+- Compatibility alias:
+  - `status` (same behavior as `query`)
+- Project helper extension:
+  - `turns` (conversation turn analytics)
+- App-specific extension:
+  - `convo/memory/save`, `convo/memory/inject`
 
 ## Troubleshooting
 
@@ -245,6 +227,12 @@ Fix:
 - Restart both servers after `.env` changes.
 - Verify `/agora/convo/start` succeeds and returns `agent_id`, `channel_name`, and `user_token`.
 - Keep `AGORA_CONVO_DEFAULT_PIPELINE_ID` blank unless you have a valid pipeline in Agora Console.
+- Verify join payload still includes:
+  - `advanced_features.enable_rtm=true`
+  - `parameters.data_channel="rtm"`
+  - `parameters.enable_metrics=true`
+  - `parameters.enable_error_message=true`
+- Verify frontend subscribes with toolkit flow (`subscribeMessage`) before starting the agent.
 
 ### Agent connects but no audible voice / choppy playback
 
@@ -256,6 +244,21 @@ Fix:
 - Disable "Auto half-duplex" first, then retest.
 - If network is unstable, retry with a fresh channel name and restart session.
 - Confirm only one browser tab is joined as the same `user_uid`.
+- Confirm `audio_scenario` is `aiserver` (default in this backend).
+- If logs show rapid publish/unpublish loops for agent UID, treat this as interrupt churn:
+  - Reduce local echo path (headset).
+  - Ensure no duplicated client/session joins in multiple tabs.
+  - Keep interruption defaults and avoid overly aggressive custom VAD thresholds.
+
+### RTM presence noise (`-13001 Presence service not connected`)
+
+Symptom:
+- Browser console prints presence service warnings while transcript still works.
+
+Fix:
+- This app does not rely on RTM presence for transcripts.
+- Keep transcript subscription with `withPresence=false` and rely on message callbacks.
+- Treat presence warnings as non-fatal unless transcript callbacks stop entirely.
 
 ## Conversational AI Quickstart (Project Setup)
 
@@ -309,6 +312,20 @@ The setup script is idempotent and safe to rerun.
 - Agora token server workflow: https://docs.agora.io/en/video-calling/token-authentication/deploy-token-server
 - Agora auth workflow: https://docs.agora.io/en/video-calling/token-authentication/authentication-workflow
 - Agora DynamicKey examples: https://github.com/AgoraIO/Tools/tree/master/DynamicKey/AgoraDynamicKey
+- CAE join: https://docs.agora.io/en/conversational-ai/rest-api/agent/join
+- CAE leave: https://docs.agora.io/en/conversational-ai/rest-api/agent/leave
+- CAE update: https://docs.agora.io/en/conversational-ai/rest-api/agent/update
+- CAE think: https://docs.agora.io/en/conversational-ai/rest-api/agent/think
+- CAE speak: https://docs.agora.io/en/conversational-ai/rest-api/agent/speak
+- CAE interrupt: https://docs.agora.io/en/conversational-ai/rest-api/agent/interrupt
+- CAE query status: https://docs.agora.io/en/conversational-ai/rest-api/agent/query
+- CAE query turns: https://docs.agora.io/en/conversational-ai/rest-api/agent/turns
+- CAE history: https://docs.agora.io/en/conversational-ai/rest-api/agent/history
+- CAE REST auth: https://docs.agora.io/en/conversational-ai/rest-api/restful-authentication
+- CAE transcripts: https://docs.agora.io/en/conversational-ai/develop/transcripts
+- CAE toolkit events: https://docs.agora.io/en/conversational-ai/develop/event-notifications
+- CAE audio best practices: https://docs.agora.io/en/conversational-ai/best-practices/audio-setup
+- CAE latency best practices: https://docs.agora.io/en/conversational-ai/best-practices/optimize-latency
 - Agora AI sales/marketing context: https://www.agora.io/en/solutions/ai-sales-marketing-agents/
 - Couchbase Cloud connect guide: https://docs.couchbase.com/cloud/get-started/connect.html
 - Couchbase command-line tools: https://docs.couchbase.com/cloud/reference/command-line-tools.html

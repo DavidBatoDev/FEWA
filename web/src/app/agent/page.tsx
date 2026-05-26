@@ -10,6 +10,14 @@ import type {
 } from "agora-rtc-sdk-ng";
 import { api } from "@/lib/api";
 import { GlobeAnimation } from "@/components/GlobeAnimation";
+import { ConversationalAIAPI } from "@/lib/conversational-ai-api";
+import {
+  EAgentState,
+  ETranscriptHelperMode,
+  IConversationalAIAPIEventHandler,
+  ITranscriptHelperItem,
+  RTMClientLike,
+} from "@/lib/conversational-ai-api/type";
 type ConvoStartResponse = {
   agent_id: string;
   agent_name: string;
@@ -72,55 +80,6 @@ type TranscriptItem = {
   text: string;
 };
 
-type ConvoEventPayload = {
-  object?: string;
-  event_type?: string;
-  text?: string;
-  turn_id?: number;
-  final?: boolean;
-  turn_status?: number;
-  message?: string;
-  data?: {
-    text?: string;
-    turn_id?: number;
-    final?: boolean;
-    turn_status?: number;
-    message?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
-
-type RtmMessageEvent = {
-  channelName: string;
-  customType?: string;
-  message: string | Uint8Array;
-  publisher: string;
-};
-
-type RtmStatusEvent = {
-  newState?: string;
-  reason?: string;
-};
-
-type RtmClientLike = {
-  login: (options?: { token?: string }) => Promise<unknown>;
-  logout: () => Promise<unknown>;
-  subscribe: (
-    channelName: string,
-    options?: {
-      withMessage?: boolean;
-      withPresence?: boolean;
-      withMetadata?: boolean;
-      withLock?: boolean;
-      beQuiet?: boolean;
-    },
-  ) => Promise<unknown>;
-  unsubscribe: (channelName: string) => Promise<unknown>;
-  addEventListener: (eventName: "message" | "status", listener: (event: unknown) => void) => void;
-  removeEventListener: (eventName: "message" | "status", listener: (event: unknown) => void) => void;
-};
-
 const DEFAULT_CHANNEL = "workflow-ph-cae";
 const DEFAULT_AGENT_UID = "1001";
 const VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"];
@@ -131,9 +90,8 @@ export default function AgentPage() {
   const agoraRtcModuleRef = useRef<(typeof import("agora-rtc-sdk-ng")) | null>(null);
   const agoraRtmModuleRef = useRef<(typeof import("agora-rtm-sdk")) | null>(null);
   const clientRef = useRef<IAgoraRTCClient | null>(null);
-  const rtmClientRef = useRef<RtmClientLike | null>(null);
-  const rtmMessageHandlerRef = useRef<((event: unknown) => void) | null>(null);
-  const rtmStatusHandlerRef = useRef<((event: unknown) => void) | null>(null);
+  const rtmClientRef = useRef<RTMClientLike | null>(null);
+  const convoApiRef = useRef<ConversationalAIAPI | null>(null);
   const activeChannelRef = useRef<string>("");
   const micTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const remoteAgentAudioRef = useRef<IRemoteAudioTrack | null>(null);
@@ -141,6 +99,7 @@ export default function AgentPage() {
   const subscribeInFlightUidsRef = useRef<Set<string>>(new Set());
   const lastPlayedTrackByUidRef = useRef<Map<string, string>>(new Map());
   const lastSubscribeAtMsByUidRef = useRef<Map<string, number>>(new Map());
+  const autoHalfDuplexRef = useRef(false);
   const micHalfDuplexMutedRef = useRef(false);
   const micUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micHalfDuplexMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,8 +117,11 @@ export default function AgentPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
   const [remoteJoinCount, setRemoteJoinCount] = useState(0);
-  const [rtmMessageCount, setRtmMessageCount] = useState(0);
+  const [transcriptEventCount, setTranscriptEventCount] = useState(0);
   const [rtmConnectionStatus, setRtmConnectionStatus] = useState("unknown");
+  const [agentState, setAgentState] = useState<EAgentState>(EAgentState.UNKNOWN);
+  const [agentMetricsCount, setAgentMetricsCount] = useState(0);
+  const [lastAgentError, setLastAgentError] = useState("");
   const [autoHalfDuplex, setAutoHalfDuplex] = useState(false);
   const [isInterrupting, setIsInterrupting] = useState(false);
   const [isSavingMemory, setIsSavingMemory] = useState(false);
@@ -191,18 +153,6 @@ export default function AgentPage() {
     return fallback;
   }
 
-  function decodeRtmPayload(rawMessage: string | Uint8Array): ConvoEventPayload | null {
-    const text =
-      typeof rawMessage === "string"
-        ? rawMessage
-        : new TextDecoder("utf-8", { fatal: false }).decode(rawMessage);
-    try {
-      return JSON.parse(text) as ConvoEventPayload;
-    } catch {
-      return null;
-    }
-  }
-
   function upsertTranscriptLine(id: string, speaker: TranscriptSpeaker, text: string) {
     setTranscript((prev) => {
       const idx = prev.findIndex((item) => item.id === id);
@@ -213,6 +163,16 @@ export default function AgentPage() {
       }
       return [...prev.slice(-39), { id, speaker, text }];
     });
+  }
+
+  function mapToolkitTranscript(items: ITranscriptHelperItem[]): TranscriptItem[] {
+    return items
+      .map((item) => ({
+        id: item.id,
+        speaker: item.role as TranscriptSpeaker,
+        text: item.text,
+      }))
+      .slice(-40);
   }
 
   function clearMicUnmuteTimer() {
@@ -256,87 +216,9 @@ export default function AgentPage() {
     return agoraRtmModuleRef.current.default;
   }
 
-  function handleTranscriptMessage(event: RtmMessageEvent) {
-    if (!activeChannelRef.current) {
-      return;
-    }
-
-    setRtmMessageCount((prev) => prev + 1);
-    const payload = decodeRtmPayload(event.message);
-    if (!payload) {
-      const preview =
-        typeof event.message === "string"
-          ? event.message.slice(0, 80)
-          : Array.from(event.message.slice(0, 20))
-              .map((n) => n.toString(16).padStart(2, "0"))
-              .join(" ");
-      upsertTranscriptLine(
-        `system-${Date.now()}-${Math.random()}`,
-        "system",
-        `Unparsed RTM message (${event.customType ?? "unknown"}): ${preview}`,
-      );
-      return;
-    }
-
-    const data = payload.data && typeof payload.data === "object" ? payload.data : undefined;
-    const objectName = String(payload.object ?? payload.event_type ?? event.customType ?? "");
-    const turnId = Number(payload.turn_id ?? data?.turn_id ?? 0);
-    const safeTurnId = Number.isFinite(turnId) ? turnId : 0;
-    const text = (
-      typeof payload.text === "string" ? payload.text : typeof data?.text === "string" ? data.text : ""
-    ).trim();
-
-    if (objectName === "user.transcription") {
-      if (!text) return;
-      const final = payload.final === true || data?.final === true;
-      const suffix = final ? "" : " (partial)";
-      upsertTranscriptLine(`user-${safeTurnId || Date.now()}`, "user", `${text}${suffix}`);
-      return;
-    }
-
-    if (objectName === "assistant.transcription") {
-      if (!text) return;
-      const turnStatus = Number(payload.turn_status ?? data?.turn_status ?? 0);
-      setIsSpeaking(turnStatus === 0);
-      const suffix = turnStatus === 2 ? " (interrupted)" : turnStatus === 0 ? " (partial)" : "";
-      upsertTranscriptLine(`assistant-${safeTurnId || Date.now()}`, "assistant", `${text}${suffix}`);
-      return;
-    }
-
-    if (objectName === "message.interrupt") {
-      upsertTranscriptLine(
-        `system-${safeTurnId || Date.now()}`,
-        "system",
-        `Agent response interrupted (turn ${safeTurnId || "?"}).`,
-      );
-      return;
-    }
-
-    if (objectName === "message.error") {
-      const msg = (
-        typeof payload.message === "string"
-          ? payload.message
-          : typeof data?.message === "string"
-            ? data.message
-            : "Agent error"
-      ).trim();
-      upsertTranscriptLine(`system-${Date.now()}-${Math.random()}`, "system", `Agent error: ${msg}`);
-      return;
-    }
-
-    if (objectName) {
-      upsertTranscriptLine(
-        `system-${Date.now()}-${Math.random()}`,
-        "system",
-        `RTM event received: ${objectName}`,
-      );
-    }
-  }
-
   async function cleanupRtm() {
     const rtmClient = rtmClientRef.current;
-    const rtmMessageHandler = rtmMessageHandlerRef.current;
-    const rtmStatusHandler = rtmStatusHandlerRef.current;
+    const convoApi = convoApiRef.current;
     const activeChannel = activeChannelRef.current;
 
     if (!rtmClient) {
@@ -346,25 +228,27 @@ export default function AgentPage() {
     }
 
     try {
-      if (rtmMessageHandler) {
-        rtmClient.removeEventListener("message", rtmMessageHandler);
+      if (convoApi && activeChannel) {
+        await convoApi.unsubscribeMessage(activeChannel);
       }
-      if (rtmStatusHandler) {
-        rtmClient.removeEventListener("status", rtmStatusHandler);
-      }
-      if (activeChannel) {
-        await rtmClient.unsubscribe(activeChannel);
-      }
+      convoApi?.destroy();
       await rtmClient.logout();
     } catch {
       // best effort cleanup
     } finally {
       rtmClientRef.current = null;
-      rtmMessageHandlerRef.current = null;
-      rtmStatusHandlerRef.current = null;
+      convoApiRef.current = null;
       activeChannelRef.current = "";
       setRtmConnectionStatus("disconnected");
     }
+  }
+
+  function scheduleHalfDuplexUnmute(delayMs = 450) {
+    if (!autoHalfDuplexRef.current || !micTrackRef.current) return;
+    clearMicUnmuteTimer();
+    micUnmuteTimerRef.current = setTimeout(() => {
+      void setHalfDuplexMicMuted(false);
+    }, delayMs);
   }
 
   async function cleanupRtc() {
@@ -405,7 +289,7 @@ export default function AgentPage() {
   }
 
   function scheduleHalfDuplexMute() {
-    if (!autoHalfDuplex || !micTrackRef.current) return;
+    if (!autoHalfDuplexRef.current || !micTrackRef.current) return;
     clearHalfDuplexMuteTimer();
     micHalfDuplexMuteTimerRef.current = setTimeout(() => {
       void setHalfDuplexMicMuted(true);
@@ -521,7 +405,10 @@ export default function AgentPage() {
     setErrorMessage("");
     setTranscript([]);
     setRemoteJoinCount(0);
-    setRtmMessageCount(0);
+    setTranscriptEventCount(0);
+    setAgentMetricsCount(0);
+    setAgentState(EAgentState.UNKNOWN);
+    setLastAgentError("");
     setMemorySummary("");
     setMemoryMessageCount(0);
     setRtmConnectionStatus("starting");
@@ -564,28 +451,51 @@ export default function AgentPage() {
       const AgoraRTM = await ensureAgoraRtmModule();
       const rtmClient = new AgoraRTM.RTM(appId, user_uid, {
         logLevel: "none",
-      }) as RtmClientLike;
-      const statusHandler = (event: unknown) => {
-        const statusEvent = event as RtmStatusEvent;
-        const connectionText = `${statusEvent.newState ?? "unknown"}${statusEvent.reason ? ` (${statusEvent.reason})` : ""}`;
-        setRtmConnectionStatus(connectionText);
-      };
-      rtmClient.addEventListener("status", statusHandler);
+      }) as RTMClientLike;
       await rtmClient.login({ token: user_token });
-      setRtmConnectionStatus("CONNECTED");
-      await rtmClient.subscribe(channel_name, {
-        withMessage: true,
-        withPresence: false,
-        withMetadata: false,
-        withLock: false,
-        beQuiet: true,
-      });
-      const messageHandler = (event: unknown) => handleTranscriptMessage(event as RtmMessageEvent);
-      rtmClient.addEventListener("message", messageHandler);
       rtmClientRef.current = rtmClient;
-      rtmMessageHandlerRef.current = messageHandler;
-      rtmStatusHandlerRef.current = statusHandler;
       activeChannelRef.current = channel_name;
+
+      ConversationalAIAPI.init({
+        rtmEngine: rtmClient,
+        renderMode: ETranscriptHelperMode.WORD,
+        enableLog: false,
+      });
+      const convoApi = ConversationalAIAPI.getInstance();
+      convoApiRef.current = convoApi;
+      const toolkitHandler: IConversationalAIAPIEventHandler = {
+        onTranscriptUpdated: (_agentUserId, transcription) => {
+          setTranscriptEventCount((prev) => prev + 1);
+          setTranscript(mapToolkitTranscript(transcription.items));
+        },
+        onAgentStateChanged: (_agentUserId, event) => {
+          setAgentState(event.state);
+          setIsSpeaking(event.state === EAgentState.SPEAKING);
+          if (!autoHalfDuplexRef.current) return;
+          if (event.state === EAgentState.SPEAKING) {
+            scheduleHalfDuplexMute();
+            return;
+          }
+          scheduleHalfDuplexUnmute(500);
+        },
+        onAgentInterrupted: (_agentUserId, event) => {
+          const suffix = event.turn_id ? ` (turn ${event.turn_id})` : "";
+          upsertTranscriptLine(`system-interrupt-${Date.now()}`, "system", `Agent interrupted${suffix}.`);
+        },
+        onAgentMetrics: () => {
+          setAgentMetricsCount((prev) => prev + 1);
+        },
+        onAgentError: (_agentUserId, event) => {
+          setLastAgentError(event.message);
+          upsertTranscriptLine(`system-error-${Date.now()}`, "system", `Agent error: ${event.message}`);
+        },
+        onRTMStateChanged: (event) => {
+          const connectionText = `${event.state}${event.reason ? ` (${event.reason})` : ""}`;
+          setRtmConnectionStatus(connectionText);
+        },
+      };
+      convoApi.addHandler(toolkitHandler);
+      await convoApi.subscribeMessage(channel_name);
 
       setStatus("Starting CAE agent...");
       const startRes = await api.post<ConvoStartResponse>("/agora/convo/start", {
@@ -620,7 +530,7 @@ export default function AgentPage() {
         const lastSubscribeTs = lastSubscribeAtMsByUidRef.current.get(uidKey) ?? 0;
         const alreadySubscribed = subscribedAudioUidsRef.current.has(uidKey);
 
-        if (!alreadySubscribed && now - lastSubscribeTs < 400) {
+        if (!alreadySubscribed && now - lastSubscribeTs < 1200) {
           return;
         }
 
@@ -631,6 +541,8 @@ export default function AgentPage() {
             await client.subscribe(remoteUser, "audio");
             subscribedAudioUidsRef.current.add(uidKey);
             lastSubscribeAtMsByUidRef.current.set(uidKey, Date.now());
+          } catch {
+            return;
           } finally {
             subscribeInFlightUidsRef.current.delete(uidKey);
           }
@@ -639,12 +551,15 @@ export default function AgentPage() {
         const audioTrack = remoteUser.audioTrack;
         if (!audioTrack) return;
 
-        clearMicUnmuteTimer();
-        remoteAgentAudioRef.current = audioTrack;
-        scheduleHalfDuplexMute();
-
         const nextTrackId = audioTrack.getTrackId();
         const lastTrackId = lastPlayedTrackByUidRef.current.get(uidKey);
+        const currentPlayingTrackId = remoteAgentAudioRef.current?.getTrackId();
+        if (currentPlayingTrackId && currentPlayingTrackId === nextTrackId && lastTrackId === nextTrackId) {
+          return;
+        }
+
+        clearMicUnmuteTimer();
+        remoteAgentAudioRef.current = audioTrack;
         if (lastTrackId !== nextTrackId) {
           audioTrack.play();
           lastPlayedTrackByUidRef.current.set(uidKey, nextTrackId);
@@ -660,12 +575,8 @@ export default function AgentPage() {
       client.on("user-unpublished", (remoteUser: IAgoraRTCRemoteUser, mediaType: "audio" | "video" | "datachannel") => {
         if (mediaType === "audio") {
           clearHalfDuplexMuteTimer();
-          if (autoHalfDuplex && micTrackRef.current) {
-            clearMicUnmuteTimer();
-            micUnmuteTimerRef.current = setTimeout(() => {
-              void setHalfDuplexMicMuted(false);
-            }, 2000);
-          }
+          scheduleHalfDuplexUnmute(1200);
+          lastPlayedTrackByUidRef.current.delete(String(remoteUser.uid));
           setStatus(`Agent audio unpublished (${remoteUser.uid})`);
         }
       });
@@ -700,6 +611,8 @@ export default function AgentPage() {
       const message = formatApiError(error, "Failed to start session.");
       setErrorMessage(message);
       setStatus("Start failed");
+      setIsSpeaking(false);
+      setAgentState(EAgentState.UNKNOWN);
       await cleanupSession();
     } finally {
       setIsStarting(false);
@@ -707,6 +620,7 @@ export default function AgentPage() {
   }
 
   function onHalfDuplexToggle(nextValue: boolean) {
+    autoHalfDuplexRef.current = nextValue;
     setAutoHalfDuplex(nextValue);
     if (!nextValue) {
       clearMicUnmuteTimer();
@@ -735,6 +649,12 @@ export default function AgentPage() {
       setStatus("Session stopped");
       setAgentId("");
       setIsActive(false);
+      setIsSpeaking(false);
+      setAgentState(EAgentState.UNKNOWN);
+      setRtmConnectionStatus("disconnected");
+      setTranscriptEventCount(0);
+      setAgentMetricsCount(0);
+      setLastAgentError("");
       clearMicUnmuteTimer();
       setTranscript([]);
       setUserUid(`${1000 + Number(Date.now().toString().slice(-3))}`);
@@ -795,11 +715,14 @@ export default function AgentPage() {
                <div><span className="text-muted-foreground">Agent ID:</span> {agentId || "-"}</div>
                <div><span className="text-muted-foreground">Remote Joins:</span> {remoteJoinCount}</div>
                <div><span className="text-muted-foreground">RTM Status:</span> {rtmConnectionStatus}</div>
-               <div><span className="text-muted-foreground">RTM Msgs:</span> {rtmMessageCount}</div>
+               <div><span className="text-muted-foreground">Agent State:</span> {agentState}</div>
+               <div><span className="text-muted-foreground">Transcript Evts:</span> {transcriptEventCount}</div>
+               <div><span className="text-muted-foreground">Metrics:</span> {agentMetricsCount}</div>
                <div><span className="text-muted-foreground">Mem Msgs:</span> {memoryMessageCount}</div>
-             </div>
+              </div>
+             {lastAgentError && <p className="text-amber-500 mt-2">Last agent error: {lastAgentError}</p>}
              {errorMessage && <p className="text-red-500 mt-2">{errorMessage}</p>}
-          </div>
+           </div>
 
           {/* Setup / Configuration */}
           <div className="rounded-xl border bg-background/50 p-4 flex flex-col gap-3">
