@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { Mic, MicOff, Square, X, Captions } from "lucide-react";
 import type { AxiosError } from "axios";
 import type {
   IAgoraRTCClient,
@@ -132,6 +133,7 @@ export default function AgentPage() {
   const micUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micHalfDuplexMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agentStateDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volumePollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [channelName, setChannelName] = useState(() => generateDefaultChannelName());
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
@@ -159,6 +161,9 @@ export default function AgentPage() {
   const [memoryMessageCount, setMemoryMessageCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioProcessingMode, setAudioProcessingMode] = useState("browser-ans");
+  const [showTranscript, setShowTranscript] = useState(true);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [micVolumeLevel, setMicVolumeLevel] = useState(0);
 
   const appIdReady = useMemo(() => appId.trim().length > 0, [appId]);
 
@@ -182,6 +187,39 @@ export default function AgentPage() {
     }
     return fallback;
   }
+
+  async function toggleMicMute() {
+    const micTrack = micTrackRef.current;
+    if (!micTrack) return;
+    const next = !isMicMuted;
+    try {
+      await micTrack.setMuted(next);
+      setIsMicMuted(next);
+    } catch {
+      // best effort
+    }
+  }
+
+  useEffect(() => {
+    if (!isActive) {
+      setMicVolumeLevel(0);
+      if (volumePollerRef.current) {
+        clearInterval(volumePollerRef.current);
+        volumePollerRef.current = null;
+      }
+      return;
+    }
+    volumePollerRef.current = setInterval(() => {
+      const level = micTrackRef.current?.getVolumeLevel?.() ?? 0;
+      setMicVolumeLevel(level);
+    }, 100);
+    return () => {
+      if (volumePollerRef.current) {
+        clearInterval(volumePollerRef.current);
+        volumePollerRef.current = null;
+      }
+    };
+  }, [isActive]);
 
   function upsertTranscriptLine(id: string, speaker: TranscriptSpeaker, text: string) {
     setTranscript((prev) => {
@@ -821,8 +859,8 @@ export default function AgentPage() {
           <GlobeAnimation isSpeaking={isSpeaking} />
         </div>
         
-        {/* Main Action Button */}
-        <div className="absolute bottom-12 z-10 flex flex-col items-center gap-4">
+        {/* Bottom Control Bar */}
+        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-3">
           {!isActive ? (
             <button
               type="button"
@@ -833,14 +871,94 @@ export default function AgentPage() {
               {isStarting ? "Connecting..." : "Initialize Session"}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={stopSession}
-              disabled={isStopping}
-              className="rounded-full border border-red-500/50 bg-red-500/10 hover:bg-red-500/20 px-8 py-4 text-lg font-bold text-red-400 transition-all shadow-[0_0_20px_rgba(239,68,68,0.2)] hover:shadow-[0_0_30px_rgba(239,68,68,0.4)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isStopping ? "Terminating..." : "Terminate Session"}
-            </button>
+            <>
+              {/* Status label */}
+              <p className="text-sm font-medium text-white/70 flex items-center gap-2">
+                {isSpeaking ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" />Speak or click button to interrupt agent</>
+                ) : (
+                  "Listening..."
+                )}
+              </p>
+
+              {/* Control row */}
+              <div className="flex items-center gap-3">
+                {/* CC — subtitles toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript((v) => !v)}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showTranscript ? "bg-white/20 text-white" : "bg-white/10 text-white/40"}`}
+                  title="Toggle subtitles"
+                >
+                  <Captions className="w-5 h-5" />
+                </button>
+
+                {/* Center: mic + wave OR mic + stop */}
+                <div className="flex items-center gap-2 bg-white/10 rounded-full px-5 py-3">
+                  {/* Mic / mute button */}
+                  <button
+                    type="button"
+                    onClick={toggleMicMute}
+                    className="text-white/80 hover:text-white transition-colors"
+                    title={isMicMuted ? "Unmute mic" : "Mute mic"}
+                  >
+                    {isMicMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5" />}
+                  </button>
+
+                  {/* Divider */}
+                  <div className="w-px h-5 bg-white/20" />
+
+                  {/* Wave bars when user speaking, animated dots otherwise, stop when AI speaking */}
+                  {isSpeaking ? (
+                    <button
+                      type="button"
+                      onClick={interruptAgent}
+                      disabled={isInterrupting}
+                      className="text-white hover:text-red-300 transition-colors disabled:opacity-50"
+                      title="Stop agent"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                    </button>
+                  ) : micVolumeLevel > 0.02 ? (
+                    /* Audio wave bars */
+                    <div className="flex items-center gap-[3px] h-5">
+                      {[0.6, 1, 0.7, 0.9, 0.5].map((base, i) => (
+                        <div
+                          key={i}
+                          className="w-[3px] rounded-full bg-cyan-400"
+                          style={{
+                            height: `${Math.max(4, Math.min(20, micVolumeLevel * 100 * base))}px`,
+                            transition: "height 80ms ease",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    /* Idle dots */
+                    <div className="flex items-center gap-1">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="w-[6px] h-[6px] rounded-full bg-cyan-400 animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s`, animationDuration: "1s" }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* X — terminate */}
+                <button
+                  type="button"
+                  onClick={stopSession}
+                  disabled={isStopping}
+                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-all disabled:opacity-50"
+                  title="Terminate session"
+                >
+                  <X className="w-5 h-5 text-red-400" />
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -932,14 +1050,6 @@ export default function AgentPage() {
         <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={interruptAgent}
-              disabled={isInterrupting || !agentId}
-              className="rounded-full border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isInterrupting ? "Interrupting..." : "Interrupt Agent"}
-            </button>
-            <button
-              type="button"
               onClick={saveShortTermMemory}
               disabled={isSavingMemory || !agentId}
               className="rounded-full border border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
@@ -965,7 +1075,7 @@ export default function AgentPage() {
         )}
 
         {/* Conversation */}
-        <div className="flex-1 flex flex-col min-h-[250px] rounded-xl border bg-background/50 overflow-hidden shadow-sm">
+        {showTranscript && <div className="flex-1 flex flex-col min-h-[250px] rounded-xl border bg-background/50 overflow-hidden shadow-sm">
           <div className="bg-muted/30 p-3 border-b flex justify-between items-center">
             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Transcript</h2>
           </div>
@@ -992,7 +1102,7 @@ export default function AgentPage() {
               ))
             )}
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
