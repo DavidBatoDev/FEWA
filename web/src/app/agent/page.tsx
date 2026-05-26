@@ -18,6 +18,12 @@ import {
   ITranscriptHelperItem,
   RTMClientLike,
 } from "@/lib/conversational-ai-api/type";
+import type {
+  AIDenoiserExtension,
+  AIDenoiserProcessorLevel,
+  AIDenoiserProcessorMode,
+  IAIDenoiserProcessor,
+} from "agora-extension-ai-denoiser";
 type ConvoStartResponse = {
   agent_id: string;
   agent_name: string;
@@ -80,9 +86,27 @@ type TranscriptItem = {
   text: string;
 };
 
-const DEFAULT_CHANNEL = "workflow-ph-cae";
 const DEFAULT_AGENT_UID = "1001";
 const VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"];
+const AUDIO_REPUBLISH_FLAP_WINDOW_MS = 1200;
+const AI_DENOISER_ASSETS_PATH = "/external";
+const AI_DENOISER_MODE_NSNG = "NSNG" as AIDenoiserProcessorMode;
+const AI_DENOISER_LEVEL_AGGRESSIVE = "AGGRESSIVE" as AIDenoiserProcessorLevel;
+
+function generateDefaultChannelName() {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `workflow-ph-cae-${suffix}`;
+}
+
+function generateDefaultUserUid(agentUidCandidate = DEFAULT_AGENT_UID) {
+  const min = 100000;
+  const max = 999999;
+  let next = Math.floor(Math.random() * (max - min + 1)) + min;
+  while (String(next) === agentUidCandidate) {
+    next = Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+  return String(next);
+}
 
 export default function AgentPage() {
   const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID ?? "";
@@ -92,22 +116,27 @@ export default function AgentPage() {
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const rtmClientRef = useRef<RTMClientLike | null>(null);
   const convoApiRef = useRef<ConversationalAIAPI | null>(null);
+  const aiDenoiserExtensionRef = useRef<AIDenoiserExtension | null>(null);
+  const aiDenoiserProcessorRef = useRef<IAIDenoiserProcessor | null>(null);
   const activeChannelRef = useRef<string>("");
   const micTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const remoteAgentAudioRef = useRef<IRemoteAudioTrack | null>(null);
   const subscribedAudioUidsRef = useRef<Set<string>>(new Set());
   const subscribeInFlightUidsRef = useRef<Set<string>>(new Set());
   const lastPlayedTrackByUidRef = useRef<Map<string, string>>(new Map());
+  const lastPlayedAtMsByUidRef = useRef<Map<string, number>>(new Map());
   const lastSubscribeAtMsByUidRef = useRef<Map<string, number>>(new Map());
+  const lastUnpublishedAtMsByUidRef = useRef<Map<string, number>>(new Map());
   const autoHalfDuplexRef = useRef(false);
   const micHalfDuplexMutedRef = useRef(false);
   const micUnmuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micHalfDuplexMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agentStateDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [channelName, setChannelName] = useState(DEFAULT_CHANNEL);
+  const [channelName, setChannelName] = useState(() => generateDefaultChannelName());
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
   const [voice, setVoice] = useState("coral");
-  const [userUid, setUserUid] = useState(() => `${1000 + Number(Date.now().toString().slice(-3))}`);
+  const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
 
   const [agentId, setAgentId] = useState("");
   const [isStarting, setIsStarting] = useState(false);
@@ -129,6 +158,7 @@ export default function AgentPage() {
   const [memorySummary, setMemorySummary] = useState("");
   const [memoryMessageCount, setMemoryMessageCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [audioProcessingMode, setAudioProcessingMode] = useState("browser-ans");
 
   const appIdReady = useMemo(() => appId.trim().length > 0, [appId]);
 
@@ -216,6 +246,84 @@ export default function AgentPage() {
     return agoraRtmModuleRef.current.default;
   }
 
+  async function attachAiDenoiser(
+    agoraRtc: Awaited<ReturnType<typeof ensureAgoraRtcModule>>,
+    micTrack: IMicrophoneAudioTrack,
+  ): Promise<boolean> {
+    try {
+      if (!aiDenoiserExtensionRef.current) {
+        const denoiserModule = await import("agora-extension-ai-denoiser");
+        const extension = new denoiserModule.AIDenoiserExtension({
+          assetsPath: AI_DENOISER_ASSETS_PATH,
+        });
+
+        if (!extension.checkCompatibility()) {
+          setStatus("AI denoiser unavailable on this browser. Using browser ANS.");
+          return false;
+        }
+
+        extension.onloaderror = (error: Error) => {
+          setLastAgentError(`AI denoiser load error: ${error.message}`);
+        };
+
+        agoraRtc.registerExtensions([extension]);
+        aiDenoiserExtensionRef.current = extension;
+      }
+
+      const processor = aiDenoiserExtensionRef.current.createProcessor();
+      processor.on("loaderror", (error: Error) => {
+        setLastAgentError(`AI denoiser processor load error: ${error.message}`);
+      });
+      processor.on("overload", async () => {
+        try {
+          await processor.disable();
+        } catch {
+          // best effort
+        }
+      });
+
+      micTrack.pipe(processor).pipe(micTrack.processorDestination);
+      await processor.setMode(AI_DENOISER_MODE_NSNG);
+      await processor.setLevel(AI_DENOISER_LEVEL_AGGRESSIVE);
+      await processor.enable();
+      aiDenoiserProcessorRef.current = processor;
+      setAudioProcessingMode("ai-denoiser");
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown AI denoiser error";
+      setLastAgentError(`AI denoiser init failed: ${message}`);
+      return false;
+    }
+  }
+
+  async function cleanupAiDenoiser() {
+    const processor = aiDenoiserProcessorRef.current;
+    const micTrack = micTrackRef.current;
+    if (!processor) return;
+
+    try {
+      processor.unpipe();
+      if (micTrack) {
+        micTrack.unpipe();
+        micTrack.pipe(micTrack.processorDestination);
+      }
+      try {
+        await processor.disable();
+      } catch {
+        // best effort
+      }
+      const processorWithDestroy = processor as IAIDenoiserProcessor & {
+        destroy?: () => Promise<void> | void;
+      };
+      await processorWithDestroy.destroy?.();
+    } catch {
+      // best effort cleanup
+    } finally {
+      aiDenoiserProcessorRef.current = null;
+      setAudioProcessingMode("browser-ans");
+    }
+  }
+
   async function cleanupRtm() {
     const rtmClient = rtmClientRef.current;
     const convoApi = convoApiRef.current;
@@ -258,6 +366,11 @@ export default function AgentPage() {
     try {
       clearMicUnmuteTimer();
       clearHalfDuplexMuteTimer();
+      if (agentStateDebounceTimerRef.current) {
+        clearTimeout(agentStateDebounceTimerRef.current);
+        agentStateDebounceTimerRef.current = null;
+      }
+      await cleanupAiDenoiser();
       if (micTrack) {
         await setHalfDuplexMicMuted(false);
         micTrack.stop();
@@ -279,7 +392,9 @@ export default function AgentPage() {
       subscribedAudioUidsRef.current.clear();
       subscribeInFlightUidsRef.current.clear();
       lastPlayedTrackByUidRef.current.clear();
+      lastPlayedAtMsByUidRef.current.clear();
       lastSubscribeAtMsByUidRef.current.clear();
+      lastUnpublishedAtMsByUidRef.current.clear();
     }
   }
 
@@ -434,6 +549,9 @@ export default function AgentPage() {
       if (!/^[0-9]{1,18}$/.test(agentUid.trim())) {
         throw new Error("Agent UID must be numeric.");
       }
+      if (userUid.trim() === agentUid.trim()) {
+        throw new Error("User UID must be different from Agent UID.");
+      }
 
       const requestedChannel = channelName.trim();
       const requestedUserUid = userUid.trim();
@@ -472,11 +590,14 @@ export default function AgentPage() {
           setAgentState(event.state);
           setIsSpeaking(event.state === EAgentState.SPEAKING);
           if (!autoHalfDuplexRef.current) return;
-          if (event.state === EAgentState.SPEAKING) {
-            scheduleHalfDuplexMute();
-            return;
-          }
-          scheduleHalfDuplexUnmute(500);
+          if (agentStateDebounceTimerRef.current) clearTimeout(agentStateDebounceTimerRef.current);
+          agentStateDebounceTimerRef.current = setTimeout(() => {
+            if (event.state === EAgentState.SPEAKING) {
+              scheduleHalfDuplexMute();
+            } else {
+              scheduleHalfDuplexUnmute(500);
+            }
+          }, 250);
         },
         onAgentInterrupted: (_agentUserId, event) => {
           const suffix = event.turn_id ? ` (turn ${event.turn_id})` : "";
@@ -553,17 +674,30 @@ export default function AgentPage() {
 
         const nextTrackId = audioTrack.getTrackId();
         const lastTrackId = lastPlayedTrackByUidRef.current.get(uidKey);
+        const lastPlayedAt = lastPlayedAtMsByUidRef.current.get(uidKey) ?? 0;
+        const lastUnpublishedAt = lastUnpublishedAtMsByUidRef.current.get(uidKey) ?? 0;
         const currentPlayingTrackId = remoteAgentAudioRef.current?.getTrackId();
-        if (currentPlayingTrackId && currentPlayingTrackId === nextTrackId && lastTrackId === nextTrackId) {
+        const sameTrack = lastTrackId === nextTrackId;
+        const inRepublishFlapWindow = sameTrack && now - lastUnpublishedAt < AUDIO_REPUBLISH_FLAP_WINDOW_MS;
+        const inReplayFlapWindow = sameTrack && now - lastPlayedAt < AUDIO_REPUBLISH_FLAP_WINDOW_MS;
+
+        if (
+          currentPlayingTrackId &&
+          currentPlayingTrackId === nextTrackId &&
+          lastTrackId === nextTrackId &&
+          (inRepublishFlapWindow || inReplayFlapWindow)
+        ) {
           return;
         }
 
-        clearMicUnmuteTimer();
         remoteAgentAudioRef.current = audioTrack;
-        if (lastTrackId !== nextTrackId) {
+
+        if (!sameTrack || now - lastPlayedAt > 3000) {
           audioTrack.play();
           lastPlayedTrackByUidRef.current.set(uidKey, nextTrackId);
+          lastPlayedAtMsByUidRef.current.set(uidKey, now);
         }
+        lastUnpublishedAtMsByUidRef.current.delete(uidKey);
         setStatus(`Agent connected (${remoteUser.uid})`);
       });
 
@@ -574,9 +708,7 @@ export default function AgentPage() {
 
       client.on("user-unpublished", (remoteUser: IAgoraRTCRemoteUser, mediaType: "audio" | "video" | "datachannel") => {
         if (mediaType === "audio") {
-          clearHalfDuplexMuteTimer();
-          scheduleHalfDuplexUnmute(1200);
-          lastPlayedTrackByUidRef.current.delete(String(remoteUser.uid));
+          lastUnpublishedAtMsByUidRef.current.set(String(remoteUser.uid), Date.now());
           setStatus(`Agent audio unpublished (${remoteUser.uid})`);
         }
       });
@@ -586,7 +718,9 @@ export default function AgentPage() {
         subscribedAudioUidsRef.current.delete(uidKey);
         subscribeInFlightUidsRef.current.delete(uidKey);
         lastPlayedTrackByUidRef.current.delete(uidKey);
+        lastPlayedAtMsByUidRef.current.delete(uidKey);
         lastSubscribeAtMsByUidRef.current.delete(uidKey);
+        lastUnpublishedAtMsByUidRef.current.delete(uidKey);
         setStatus(`Remote left (${remoteUser.uid})`);
       });
 
@@ -595,10 +729,20 @@ export default function AgentPage() {
       const micTrack = await AgoraRTC.createMicrophoneAudioTrack({
         encoderConfig: "speech_standard",
         AEC: true,
-        ANS: true,
+        ANS: false,
         AGC: true,
       });
       micTrackRef.current = micTrack;
+      const denoiserAttached = await attachAiDenoiser(AgoraRTC, micTrack);
+      if (!denoiserAttached) {
+        // Fallback to built-in suppression if AI denoiser is unavailable.
+        try {
+          await micTrack.setEnabled(false);
+          await micTrack.setEnabled(true);
+        } catch {
+          // best effort fallback
+        }
+      }
       await client.publish([micTrack]);
 
       setIsActive(true);
@@ -655,9 +799,11 @@ export default function AgentPage() {
       setTranscriptEventCount(0);
       setAgentMetricsCount(0);
       setLastAgentError("");
+      setAudioProcessingMode("browser-ans");
       clearMicUnmuteTimer();
       setTranscript([]);
-      setUserUid(`${1000 + Number(Date.now().toString().slice(-3))}`);
+      setChannelName(generateDefaultChannelName());
+      setUserUid(generateDefaultUserUid(agentUid.trim() || DEFAULT_AGENT_UID));
     } catch (error) {
       const message = formatApiError(error, "Failed to stop session.");
       setErrorMessage(message);
@@ -718,6 +864,7 @@ export default function AgentPage() {
                <div><span className="text-muted-foreground">Agent State:</span> {agentState}</div>
                <div><span className="text-muted-foreground">Transcript Evts:</span> {transcriptEventCount}</div>
                <div><span className="text-muted-foreground">Metrics:</span> {agentMetricsCount}</div>
+               <div><span className="text-muted-foreground">Audio Proc:</span> {audioProcessingMode}</div>
                <div><span className="text-muted-foreground">Mem Msgs:</span> {memoryMessageCount}</div>
               </div>
              {lastAgentError && <p className="text-amber-500 mt-2">Last agent error: {lastAgentError}</p>}

@@ -235,7 +235,7 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             "end_of_speech": {
                 "mode": "vad",
                 "vad_config": {
-                    "silence_duration_ms": 700,
+                    "silence_duration_ms": 1000,
                 },
             },
         },
