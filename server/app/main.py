@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import agent, leads, agora, campaigns
+from app.routes import agent, leads, agora, campaigns, dashboard
 
 app = FastAPI(
     title="Workflow PH AI Sales Agent API",
@@ -20,6 +20,7 @@ app.include_router(agent.router)
 app.include_router(leads.router)
 app.include_router(agora.router)
 app.include_router(campaigns.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/")

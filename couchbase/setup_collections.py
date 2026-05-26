@@ -30,7 +30,9 @@ INDEXES = [
     f"CREATE INDEX IF NOT EXISTS idx_leads_status ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`(status)",
     f"CREATE INDEX IF NOT EXISTS idx_leads_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`(created_at)",
     f"CREATE INDEX IF NOT EXISTS idx_conversations_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`conversations`(lead_id)",
+    f"CREATE INDEX IF NOT EXISTS idx_conversations_objections_norm ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`conversations`(DISTINCT ARRAY LOWER(TRIM(objection)) FOR objection IN objections END)",
     f"CREATE INDEX IF NOT EXISTS idx_followups_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(lead_id)",
+    f"CREATE INDEX IF NOT EXISTS idx_followups_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(created_at)",
 ]
 
 
