@@ -9,7 +9,7 @@ import type {
   IRemoteAudioTrack,
 } from "agora-rtc-sdk-ng";
 import { api } from "@/lib/api";
-
+import { GlobeAnimation } from "@/components/GlobeAnimation";
 type ConvoStartResponse = {
   agent_id: string;
   agent_name: string;
@@ -80,6 +80,14 @@ type ConvoEventPayload = {
   final?: boolean;
   turn_status?: number;
   message?: string;
+  data?: {
+    text?: string;
+    turn_id?: number;
+    final?: boolean;
+    turn_status?: number;
+    message?: string;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 };
 
@@ -158,6 +166,7 @@ export default function AgentPage() {
   const [isInjectingMemory, setIsInjectingMemory] = useState(false);
   const [memorySummary, setMemorySummary] = useState("");
   const [memoryMessageCount, setMemoryMessageCount] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const appIdReady = useMemo(() => appId.trim().length > 0, [appId]);
 
@@ -269,14 +278,17 @@ export default function AgentPage() {
       return;
     }
 
+    const data = payload.data && typeof payload.data === "object" ? payload.data : undefined;
     const objectName = String(payload.object ?? payload.event_type ?? event.customType ?? "");
-    const turnId = Number(payload.turn_id ?? 0);
+    const turnId = Number(payload.turn_id ?? data?.turn_id ?? 0);
     const safeTurnId = Number.isFinite(turnId) ? turnId : 0;
-    const text = typeof payload.text === "string" ? payload.text.trim() : "";
+    const text = (
+      typeof payload.text === "string" ? payload.text : typeof data?.text === "string" ? data.text : ""
+    ).trim();
 
     if (objectName === "user.transcription") {
       if (!text) return;
-      const final = payload.final === true;
+      const final = payload.final === true || data?.final === true;
       const suffix = final ? "" : " (partial)";
       upsertTranscriptLine(`user-${safeTurnId || Date.now()}`, "user", `${text}${suffix}`);
       return;
@@ -284,7 +296,8 @@ export default function AgentPage() {
 
     if (objectName === "assistant.transcription") {
       if (!text) return;
-      const turnStatus = Number(payload.turn_status ?? 0);
+      const turnStatus = Number(payload.turn_status ?? data?.turn_status ?? 0);
+      setIsSpeaking(turnStatus === 0);
       const suffix = turnStatus === 2 ? " (interrupted)" : turnStatus === 0 ? " (partial)" : "";
       upsertTranscriptLine(`assistant-${safeTurnId || Date.now()}`, "assistant", `${text}${suffix}`);
       return;
@@ -300,9 +313,23 @@ export default function AgentPage() {
     }
 
     if (objectName === "message.error") {
-      const msg = typeof payload.message === "string" ? payload.message : "Agent error";
+      const msg = (
+        typeof payload.message === "string"
+          ? payload.message
+          : typeof data?.message === "string"
+            ? data.message
+            : "Agent error"
+      ).trim();
       upsertTranscriptLine(`system-${Date.now()}-${Math.random()}`, "system", `Agent error: ${msg}`);
       return;
+    }
+
+    if (objectName) {
+      upsertTranscriptLine(
+        `system-${Date.now()}-${Math.random()}`,
+        "system",
+        `RTM event received: ${objectName}`,
+      );
     }
   }
 
@@ -721,184 +748,182 @@ export default function AgentPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
-      <section className="rounded-xl border p-6">
-        <h1 className="text-2xl font-bold">Agora Conversational AI Voice Test</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This route uses Agora Conversational AI Engine + Agora RTC/Web SDK. Transcript events are read through RTM.
-        </p>
-      </section>
-
-      <section className="rounded-xl border p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="channelName">
-              Channel Name
-            </label>
-            <input
-              id="channelName"
-              value={channelName}
-              onChange={(event) => setChannelName(event.target.value)}
-              disabled={isActive || isStarting}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="userUid">
-              User UID (numeric)
-            </label>
-            <input
-              id="userUid"
-              value={userUid}
-              onChange={(event) => setUserUid(event.target.value)}
-              disabled={isActive || isStarting}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="agentUid">
-              Agent UID (numeric)
-            </label>
-            <input
-              id="agentUid"
-              value={agentUid}
-              onChange={(event) => setAgentUid(event.target.value)}
-              disabled={isActive || isStarting}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium" htmlFor="voice">
-              Agora Agent Voice (TTS preset voice)
-            </label>
-            <select
-              id="voice"
-              value={voice}
-              onChange={(event) => setVoice(event.target.value)}
-              disabled={isActive || isStarting}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+    <div className="dark h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
+      {/* LEFT SIDE: Globe & Action Button */}
+      <div className="relative w-full md:w-1/2 h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/20">
+        <div className="absolute inset-0 w-full h-full pointer-events-none opacity-90 flex items-center justify-center">
+          <GlobeAnimation isSpeaking={isSpeaking} />
+        </div>
+        
+        {/* Main Action Button */}
+        <div className="absolute bottom-12 z-10 flex flex-col items-center gap-4">
+          {!isActive ? (
+            <button
+              type="button"
+              onClick={startSession}
+              disabled={isStarting}
+              className="rounded-full bg-cyan-500 hover:bg-cyan-400 px-8 py-4 text-lg font-bold text-black transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.7)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {VOICES.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={startSession}
-            disabled={isStarting || isActive}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isStarting ? "Starting..." : "Start CAE Session"}
-          </button>
-          <button
-            type="button"
-            onClick={stopSession}
-            disabled={isStopping || (!isActive && !agentId)}
-            className="rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isStopping ? "Stopping..." : "Stop Session"}
-          </button>
-          <button
-            type="button"
-            onClick={interruptAgent}
-            disabled={isInterrupting || !agentId}
-            className="rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isInterrupting ? "Interrupting..." : "Interrupt Agent"}
-          </button>
-          <button
-            type="button"
-            onClick={saveShortTermMemory}
-            disabled={isSavingMemory || !agentId}
-            className="rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSavingMemory ? "Saving Memory..." : "Save Memory"}
-          </button>
-          <button
-            type="button"
-            onClick={injectSavedMemory}
-            disabled={isInjectingMemory || !agentId}
-            className="rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isInjectingMemory ? "Injecting Memory..." : "Inject Saved Memory"}
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={autoHalfDuplex}
-              onChange={(event) => onHalfDuplexToggle(event.target.checked)}
-            />
-            Auto half-duplex (mute your mic while agent is speaking)
-          </label>
-        </div>
-
-        <div className="mt-4 space-y-2 text-sm">
-          <p>
-            <span className="font-semibold">Status:</span> {status}
-          </p>
-          <p>
-            <span className="font-semibold">App ID:</span> {appIdReady ? "Configured" : "Missing"}
-          </p>
-          <p>
-            <span className="font-semibold">Agent ID:</span> {agentId || "-"}
-          </p>
-          <p>
-            <span className="font-semibold">Remote joins:</span> {remoteJoinCount}
-          </p>
-          <p>
-            <span className="font-semibold">RTM status:</span> {rtmConnectionStatus}
-          </p>
-          <p>
-            <span className="font-semibold">Transcript messages:</span> {rtmMessageCount}
-          </p>
-          <p>
-            <span className="font-semibold">Saved memory messages:</span> {memoryMessageCount}
-          </p>
-          {errorMessage ? <p className="text-red-600">{errorMessage}</p> : null}
-        </div>
-      </section>
-
-      <section className="rounded-xl border p-6">
-        <h2 className="text-lg font-semibold">Short-Term Memory</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Saved summary derived from Agora CAE history. Inject this into `llm.system_messages` for continuity.
-        </p>
-        <div className="mt-4 min-h-24 rounded-md border p-3 text-sm">
-          {memorySummary ? memorySummary : "No saved memory summary yet."}
-        </div>
-      </section>
-
-      <section className="rounded-xl border p-6">
-        <h2 className="text-lg font-semibold">Transcript</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live CAE transcript/events via Agora RTM message channel.
-        </p>
-        <div className="mt-4 h-64 overflow-y-auto rounded-md border p-3 text-sm">
-          {transcript.length === 0 ? (
-            <p className="text-muted-foreground">No transcript yet. Start speaking after session is live.</p>
+              {isStarting ? "Connecting..." : "Initialize Session"}
+            </button>
           ) : (
-            <ul className="space-y-2">
-              {transcript.map((item) => (
-                <li key={item.id}>
-                  <span className="font-semibold">{item.speaker}:</span> {item.text}
-                </li>
-              ))}
-            </ul>
+            <button
+              type="button"
+              onClick={stopSession}
+              disabled={isStopping}
+              className="rounded-full border border-red-500/50 bg-red-500/10 hover:bg-red-500/20 px-8 py-4 text-lg font-bold text-red-400 transition-all shadow-[0_0_20px_rgba(239,68,68,0.2)] hover:shadow-[0_0_30px_rgba(239,68,68,0.4)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isStopping ? "Terminating..." : "Terminate Session"}
+            </button>
           )}
         </div>
-      </section>
-    </main>
+      </div>
+
+      {/* RIGHT SIDE: Controls, Stats & Conversation */}
+      <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto gap-6 bg-card/30">
+        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex justify-between items-center">
+          FEWA CAE System
+        </h1>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Status & Metrics */}
+          <div className="rounded-xl border bg-background/50 p-4 text-xs flex flex-col gap-2 overflow-hidden">
+             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">System Status</h2>
+             <div className="grid grid-cols-2 gap-2">
+               <div><span className="text-muted-foreground">Status:</span> <span className="font-medium text-cyan-400">{status}</span></div>
+               <div><span className="text-muted-foreground">App ID:</span> {appIdReady ? "Configured" : "Missing"}</div>
+               <div><span className="text-muted-foreground">Agent ID:</span> {agentId || "-"}</div>
+               <div><span className="text-muted-foreground">Remote Joins:</span> {remoteJoinCount}</div>
+               <div><span className="text-muted-foreground">RTM Status:</span> {rtmConnectionStatus}</div>
+               <div><span className="text-muted-foreground">RTM Msgs:</span> {rtmMessageCount}</div>
+               <div><span className="text-muted-foreground">Mem Msgs:</span> {memoryMessageCount}</div>
+             </div>
+             {errorMessage && <p className="text-red-500 mt-2">{errorMessage}</p>}
+          </div>
+
+          {/* Setup / Configuration */}
+          <div className="rounded-xl border bg-background/50 p-4 flex flex-col gap-3">
+             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Configuration</h2>
+             
+             <div className="grid grid-cols-2 gap-2 text-xs">
+               <div>
+                  <label className="text-muted-foreground mb-1 block">Channel</label>
+                  <input
+                    value={channelName}
+                    onChange={(event) => setChannelName(event.target.value)}
+                    disabled={isActive || isStarting}
+                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  />
+               </div>
+               <div>
+                  <label className="text-muted-foreground mb-1 block">Voice</label>
+                  <select
+                    value={voice}
+                    onChange={(event) => setVoice(event.target.value)}
+                    disabled={isActive || isStarting}
+                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  >
+                    {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+               </div>
+               <div>
+                  <label className="text-muted-foreground mb-1 block">User UID</label>
+                  <input
+                    value={userUid}
+                    onChange={(event) => setUserUid(event.target.value)}
+                    disabled={isActive || isStarting}
+                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  />
+               </div>
+               <div>
+                  <label className="text-muted-foreground mb-1 block">Agent UID</label>
+                  <input
+                    value={agentUid}
+                    onChange={(event) => setAgentUid(event.target.value)}
+                    disabled={isActive || isStarting}
+                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
+                  />
+               </div>
+             </div>
+
+             <label className="inline-flex items-center gap-2 text-[10px] mt-1 text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={autoHalfDuplex}
+                  onChange={(event) => onHalfDuplexToggle(event.target.checked)}
+                  className="rounded text-cyan-500 focus:ring-cyan-500"
+                />
+                Auto half-duplex (mute mic when agent speaks)
+              </label>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={interruptAgent}
+              disabled={isInterrupting || !agentId}
+              className="rounded-full border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isInterrupting ? "Interrupting..." : "Interrupt Agent"}
+            </button>
+            <button
+              type="button"
+              onClick={saveShortTermMemory}
+              disabled={isSavingMemory || !agentId}
+              className="rounded-full border border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingMemory ? "Saving..." : "Save Memory"}
+            </button>
+            <button
+              type="button"
+              onClick={injectSavedMemory}
+              disabled={isInjectingMemory || !agentId}
+              className="rounded-full border border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 px-4 py-2 text-xs font-semibold text-purple-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isInjectingMemory ? "Injecting..." : "Inject Memory"}
+            </button>
+        </div>
+
+        {/* Memory Box */}
+        {memorySummary && (
+          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-xs text-cyan-100">
+             <h2 className="font-bold uppercase tracking-wider text-cyan-400 mb-2 text-[10px]">Short-Term Memory</h2>
+             <p className="leading-relaxed">{memorySummary}</p>
+          </div>
+        )}
+
+        {/* Conversation */}
+        <div className="flex-1 flex flex-col min-h-[250px] rounded-xl border bg-background/50 overflow-hidden shadow-sm">
+          <div className="bg-muted/30 p-3 border-b flex justify-between items-center">
+            <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Transcript</h2>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
+            {transcript.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                No transcript yet. Session inactive.
+              </div>
+            ) : (
+              transcript.map((line) => (
+                <div
+                  key={line.id}
+                  className={`rounded-2xl p-4 text-sm max-w-[85%] ${
+                    line.speaker === "assistant"
+                      ? "bg-muted/80 text-foreground self-start rounded-bl-sm"
+                      : line.speaker === "user" 
+                      ? "bg-cyan-600/20 border border-cyan-500/30 text-cyan-50 self-end rounded-br-sm ml-auto"
+                      : "bg-gray-600/20 border border-gray-500/30 text-gray-300 self-center rounded-lg text-xs"
+                  }`}
+                >
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider opacity-50">{line.speaker}</p>
+                  <p className="leading-relaxed">{line.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

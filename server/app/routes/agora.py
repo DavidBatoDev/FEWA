@@ -307,22 +307,24 @@ async def start_conversational_agent(req: ConvoStartRequest):
                 "start_of_speech": {
                     "mode": "vad",
                     "vad_config": {
-                        "interrupt_duration_ms": 160,
-                        "speaking_interrupt_duration_ms": 320,
-                        "prefix_padding_ms": 800,
+                        # Use less aggressive VAD thresholds to avoid constant barge-in flapping.
+                        "interrupt_duration_ms": 600,
+                        "speaking_interrupt_duration_ms": 900,
+                        "prefix_padding_ms": 1500,
                     },
                 },
                 "end_of_speech": {
-                    "mode": "semantic",
-                    "semantic_config": {
-                        "silence_duration_ms": 320,
-                        "max_wait_ms": 3000,
+                    "mode": "vad",
+                    "vad_config": {
+                        "silence_duration_ms": 1200,
                     },
                 },
             },
         },
         "parameters": {
             "data_channel": "rtm",
+            # Recommended voice scenario for conversational playback quality.
+            "audio_scenario": "chorus",
             "enable_metrics": True,
             "enable_error_message": True,
             "transcript": {
