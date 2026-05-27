@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AgentCard } from "@/components/AgentCard";
 import { CalendarDemo } from "@/components/CalendarDemo";
+import { CommerceDemo } from "@/components/CommerceDemo";
 import { 
   Cpu, 
   Sparkles, 
@@ -59,6 +60,8 @@ export default function LandingPage() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState<"sales" | "commerce">("sales");
   const [animateKey, setAnimateKey] = useState(0);
+  const [demoMode, setDemoMode] = useState<"b2b" | "b2c">("b2b");
+  const [animateDemoKey, setAnimateDemoKey] = useState(0);
 
   const salesLogs = [
     { tool: "extract_lead_info()", time: "00:08", detail: "Company: ABC Logistics" },
@@ -487,18 +490,52 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 4. INTERACTIVE CALENDAR DEMO SECTION */}
+      {/* 4. INTERACTIVE CALENDAR & COMMERCE DEMO SECTION */}
       <section id="demo-booking" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 reveal-item-slide-top">
-        <div className="text-center space-y-4 mb-16">
+        <div className="text-center space-y-4 mb-10">
           <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">INTERACTIVE PREVIEW</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">Experience the Agent Pipeline</h2>
           <p className="text-sm text-zinc-400 max-w-xl mx-auto">
-            Book a test demo slot using the calendar widget below. Watch how the B2B agent fires tools and generates follow-ups dynamically.
+            Test our vertical AI pipelines below. Toggle between B2B scheduling and B2C conversational checkout simulations.
           </p>
         </div>
+
+        {/* B2B vs B2C Sandbox Mode Selector */}
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex p-1 rounded-full border border-white/[0.05] bg-zinc-950/80 backdrop-blur-xl">
+            <button
+              onClick={() => {
+                setDemoMode("b2b");
+                setAnimateDemoKey(prev => prev + 1);
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                demoMode === "b2b"
+                  ? "bg-cyan-500 text-zinc-950 shadow-[0_0_15px_rgba(6,182,212,0.3)] font-black"
+                  : "text-zinc-550 hover:text-white"
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              B2B Call Scheduler
+            </button>
+            <button
+              onClick={() => {
+                setDemoMode("b2c");
+                setAnimateDemoKey(prev => prev + 1);
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                demoMode === "b2c"
+                  ? "bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] font-black"
+                  : "text-zinc-550 hover:text-white"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              B2C Cart Checkout
+            </button>
+          </div>
+        </div>
         
-        <div className="reveal-item-slide-up">
-          <CalendarDemo />
+        <div key={animateDemoKey} className="reveal-item-slide-up animate-slide-top">
+          {demoMode === "b2b" ? <CalendarDemo /> : <CommerceDemo />}
         </div>
       </section>
 
