@@ -7,6 +7,7 @@ from app.models.conversation import Conversation, TranscriptEntry
 from app.models.lead import Lead
 from app.services.ai_agent import extract_lead_profile
 from app.services.lead_scorer import score_lead
+from app.services.next_best_action import update_lead_next_best_action
 from app.services.offer_recommender import recommend_offer
 
 SALES_PROFILE_FIELDS = [
@@ -100,6 +101,8 @@ async def refresh_sales_state_from_transcript(
 
     lead.objections = list(conversation.objections)
     lead.buying_signals = list(conversation.buying_signals)
+
+    lead = update_lead_next_best_action(lead)
 
     ts = now_iso()
     lead.updated_at = ts
