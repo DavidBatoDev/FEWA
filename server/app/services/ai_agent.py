@@ -186,33 +186,46 @@ Return plain text only."""
         return fallback_summary
 
 
+def _to_clean_str(val: object) -> str:
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        return " ".join(str(x) for x in val)
+    return str(val).strip()
+
+
 def compute_lead_score(lead: Lead, asked_for_proposal: bool = False) -> tuple[int, dict]:
     breakdown = {}
     score = 0
 
+    pain_point_str = _to_clean_str(lead.pain_point)
+    timeline_str = _to_clean_str(lead.timeline)
+    decision_maker_str = _to_clean_str(lead.decision_maker)
+    budget_readiness_str = _to_clean_str(lead.budget_readiness)
+
     # 1. Clear pain point (+20)
-    if lead.pain_point and lead.pain_point.strip():
+    if pain_point_str:
         breakdown["pain_point"] = {"status": "Yes", "points": 20}
         score += 20
     else:
         breakdown["pain_point"] = {"status": "No", "points": 0}
 
     # 2. Urgent timeline (+20)
-    if lead.timeline and lead.timeline.strip() and lead.timeline.lower() not in ("later", "not sure", "no", "none"):
+    if timeline_str and timeline_str.lower() not in ("later", "not sure", "no", "none"):
         breakdown["timeline"] = {"status": "Yes", "points": 20}
         score += 20
     else:
         breakdown["timeline"] = {"status": "No", "points": 0}
 
     # 3. Decision maker (+20)
-    if lead.decision_maker and any(kw in lead.decision_maker.lower() for kw in ("yes", "true", "owner", "decide")):
+    if decision_maker_str and any(kw in decision_maker_str.lower() for kw in ("yes", "true", "owner", "decide")):
         breakdown["decision_maker"] = {"status": "Yes", "points": 20}
         score += 20
     else:
         breakdown["decision_maker"] = {"status": "No", "points": 0}
 
     # 4. Budget readiness (+20 or +10 partial)
-    budget_val = (lead.budget_readiness or "").lower().strip()
+    budget_val = budget_readiness_str.lower()
     if not budget_val or budget_val in ("no", "none", "no budget", "false"):
         breakdown["budget_readiness"] = {"status": "No", "points": 0}
     elif any(kw in budget_val for kw in ("proposal", "open", "partial", "not sure", "depends")):
@@ -273,8 +286,8 @@ OFFERS = [
 
 
 def recommend_offer(lead: Lead) -> str:
-    pain = (lead.pain_point or "").lower()
-    solution = (lead.current_solution or "").lower()
+    pain = _to_clean_str(lead.pain_point).lower()
+    solution = _to_clean_str(lead.current_solution).lower()
     combined = f"{pain} {solution}"
 
     scores = []
