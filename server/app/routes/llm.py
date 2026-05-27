@@ -29,7 +29,7 @@ You MUST call tools in the background on every turn — even if the lead only sa
 - generate_follow_up: Call at the very end of the conversation before saying goodbye.
 You may call multiple tools in a single turn. Never narrate or describe tool calls in your spoken response.
 """
-from app.services.tool_executor import run as run_tool
+from app.services.tool_executor import run as run_tool, save_transcript_turn
 
 router = APIRouter(tags=["llm"])
 logger = logging.getLogger(__name__)
@@ -232,6 +232,12 @@ async def _stream_openai(
     channel: str,
     model: str = "gpt-5-mini",
 ) -> AsyncGenerator[str, None]:
+    # Capture the latest user message BEFORE we mutate the list with tool results.
+    user_text = next(
+        (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"),
+        "",
+    )
+
     try:
         # Round 1: use gpt-4o-mini for fast tool detection (~1s vs ~5s for reasoning models)
         t0 = time.monotonic()
@@ -289,17 +295,30 @@ async def _stream_openai(
                 max_tokens=500,
             )
         else:
-            # No tools fired — stream the first response directly
-            if msg.content:
-                yield _make_chunk(msg.content, RESPONSE_MODEL)
+            # No tools fired (safety-net path — shouldn't happen with tool_choice="required")
+            assistant_text = msg.content or ""
+            if assistant_text:
+                yield _make_chunk(assistant_text, RESPONSE_MODEL)
             yield _make_chunk("", RESPONSE_MODEL, finish_reason="stop")
             yield "data: [DONE]\n\n"
+            if user_text or assistant_text:
+                asyncio.create_task(save_transcript_turn(channel, user_text, assistant_text))
             return
 
+        # Round 2: stream and collect the full assistant response for transcript saving
+        assistant_parts: list[str] = []
         async for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                assistant_parts.append(delta)
             yield f"data: {chunk.model_dump_json()}\n\n"
 
         yield "data: [DONE]\n\n"
+
+        # Fire-and-forget: persist turn + conditionally trigger summary
+        assistant_text = "".join(assistant_parts)
+        if user_text or assistant_text:
+            asyncio.create_task(save_transcript_turn(channel, user_text, assistant_text))
 
     except Exception as exc:
         logger.exception("Error in _stream_openai: %s", exc)

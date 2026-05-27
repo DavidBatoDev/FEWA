@@ -52,6 +52,7 @@ class ConvoStartRequest(BaseModel):
     preset: str | None = None
     pipeline_id: str | None = None
     tts_voice: str | None = None
+    tts_speed: float | None = None
     audio_scenario: str | None = None
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
@@ -277,6 +278,7 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
         "tts": {
             "params": {
                 "voice": (req.tts_voice or settings.agora_convo_default_tts_voice),
+                "speed": max(0.25, min(4.0, req.tts_speed if req.tts_speed is not None else settings.agora_convo_default_tts_speed)),
             }
         },
         "llm": {

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from couchbase.exceptions import CouchbaseException
 
 from app.db.couchbase import get_collection
+from app.models.conversation import Conversation, TranscriptEntry
 from app.models.lead import Lead
 from app.services.event_bus import EventBus
 
@@ -246,6 +247,102 @@ async def _handle_generate_follow_up(args: dict, lead_id: str, channel: str) -> 
     }
     await asyncio.gather(_save_lead(lead_id, lead), EventBus.publish(channel, event))
     return {"ok": True, "subject": subject}
+
+
+async def _get_conversation(conversation_id: str) -> Conversation | None:
+    try:
+        col = get_collection("conversations")
+        result = col.get(conversation_id)
+        return Conversation(**result.content_as[dict])
+    except CouchbaseException:
+        return None
+
+
+async def _save_conversation(conversation_id: str, conv: Conversation) -> None:
+    try:
+        col = get_collection("conversations")
+        conv.updated_at = _now()
+        col.upsert(conversation_id, conv.model_dump())
+    except CouchbaseException:
+        pass
+
+
+async def _run_summary(conversation_id: str, lead_id: str, channel: str, transcript: list[TranscriptEntry]) -> None:
+    """Generate an OpenAI summary from the transcript and persist it asynchronously."""
+    try:
+        from app.services.ai_agent import generate_conversation_summary
+
+        summary = await generate_conversation_summary(transcript)
+        if not summary:
+            return
+
+        # Persist on the conversation doc
+        conv = await _get_conversation(conversation_id)
+        if conv:
+            conv.summary = summary
+            await _save_conversation(conversation_id, conv)
+
+        # Mirror onto the lead doc so it shows up in the lead panel
+        lead = await _get_lead(lead_id)
+        if lead:
+            lead.conversation_summary = summary
+            await _save_lead(lead_id, lead)
+
+        # Push live SSE update so the frontend panel refreshes
+        await EventBus.publish(channel, {
+            "tool": "summary_updated",
+            "timestamp": _elapsed(lead.created_at) if lead else "00:00",
+            "data": {"summary": summary[:300]},
+        })
+
+        logger.info("Summary saved for channel=%r  len=%d", channel, len(summary))
+    except Exception:
+        logger.exception("Background summary generation failed for channel=%r", channel)
+
+
+async def save_transcript_turn(
+    channel: str,
+    user_text: str,
+    assistant_text: str,
+) -> None:
+    """Append one user+assistant turn to the Conversation transcript.
+
+    Fires asynchronously after each streamed response.  Every 8 transcript
+    entries (= 4 conversational turns) a summary is generated in the
+    background via _run_summary.
+    """
+    session = get_session(channel)
+    if not session:
+        logger.warning("save_transcript_turn: no session for channel=%r", channel)
+        return
+
+    conversation_id = session["conversation_id"]
+    lead_id = session["lead_id"]
+
+    conv = await _get_conversation(conversation_id)
+    if conv is None:
+        conv = Conversation(lead_id=lead_id, created_at=_now(), updated_at=_now())
+
+    ts = _now()
+    if user_text:
+        conv.transcript.append(TranscriptEntry(role="user", message=user_text, timestamp=ts))
+    if assistant_text:
+        conv.transcript.append(TranscriptEntry(role="assistant", message=assistant_text, timestamp=ts))
+
+    await _save_conversation(conversation_id, conv)
+
+    total = len(conv.transcript)
+    logger.info(
+        "Transcript saved: channel=%r  total_entries=%d",
+        channel, total,
+    )
+
+    # Trigger a summary every 8 transcript entries (≈ 4 turns)
+    if total > 0 and total % 8 == 0:
+        logger.info("Triggering async summary at %d entries for channel=%r", total, channel)
+        asyncio.create_task(
+            _run_summary(conversation_id, lead_id, channel, list(conv.transcript))
+        )
 
 
 async def _handle_no_op(args: dict, lead_id: str, channel: str) -> dict:
