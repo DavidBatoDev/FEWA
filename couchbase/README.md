@@ -1,6 +1,6 @@
 # Couchbase Setup and CLI Verification (Capella)
 
-This folder contains scripts to bootstrap and verify Couchbase for Workflow PH AI Sales Agent.
+This folder contains scripts to bootstrap and verify Couchbase for FFlow PH AI Sales Agent.
 
 ## What these scripts do
 
@@ -16,7 +16,7 @@ Both scripts are idempotent and safe to re-run.
 ## Prerequisites
 
 1. Couchbase Capella cluster.
-2. Bucket `workflow_ph` created in Capella.
+2. Bucket `fflow_ph` created in Capella.
 3. `server/.env` configured with connection string and credentials.
 4. Backend venv activated with dependencies installed.
 
@@ -53,17 +53,17 @@ Run these inside `cbsh`:
 
 ```sql
 buckets
-scopes -b workflow_ph
-collections -b workflow_ph -s sales_agent
+scopes -b fflow_ph
+collections -b fflow_ph -s sales_agent
 query "SELECT RAW name FROM system:indexes WHERE keyspace_id IN ['leads','conversations','follow_ups']"
 ```
 
 ### 4) Query examples (inspection)
 
 ```sql
-query "SELECT META().id, l.lead_temperature, l.lead_score, l.created_at FROM `workflow_ph`.`sales_agent`.`leads` l ORDER BY l.created_at DESC LIMIT 10"
-query "SELECT META().id, c.lead_id, c.updated_at FROM `workflow_ph`.`sales_agent`.`conversations` c ORDER BY c.updated_at DESC LIMIT 10"
-query "SELECT META().id, f.lead_id, f.status, f.created_at FROM `workflow_ph`.`sales_agent`.`follow_ups` f ORDER BY f.created_at DESC LIMIT 10"
+query "SELECT META().id, l.lead_temperature, l.lead_score, l.created_at FROM `fflow_ph`.`sales_agent`.`leads` l ORDER BY l.created_at DESC LIMIT 10"
+query "SELECT META().id, c.lead_id, c.updated_at FROM `fflow_ph`.`sales_agent`.`conversations` c ORDER BY c.updated_at DESC LIMIT 10"
+query "SELECT META().id, f.lead_id, f.status, f.created_at FROM `fflow_ph`.`sales_agent`.`follow_ups` f ORDER BY f.created_at DESC LIMIT 10"
 ```
 
 ## Troubleshooting
@@ -75,7 +75,7 @@ query "SELECT META().id, f.lead_id, f.status, f.created_at FROM `workflow_ph`.`s
 
 ### Auth/permission errors
 
-- Confirm DB user has permission to read/write `workflow_ph` and create indexes if running setup.
+- Confirm DB user has permission to read/write `fflow_ph` and create indexes if running setup.
 
 ### Missing scope/collections/indexes
 

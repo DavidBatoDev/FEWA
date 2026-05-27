@@ -37,7 +37,7 @@ async def start_conversation(req: StartRequest):
         lead_id, conversation_id, _, _ = create_lead_and_conversation(campaign_id=req.campaign_id)
 
         greeting = (
-            "Hi! I'm the Workflow PH Sales Agent. "
+            "Hi! I'm the FFlow PH Sales Agent. "
             "I'm here to help understand your business and find the best solution for you. "
             "Can you tell me a little about your business and what you're looking to improve?"
         )

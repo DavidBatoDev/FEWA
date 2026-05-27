@@ -18,9 +18,15 @@ from pydantic import BaseModel
 from app.config import settings
 from app.db.couchbase import get_collection
 from app.models.lead import Lead
+from app.models.customer import Customer
 from app.models.conversation import Conversation
 from app.services.ai_agent import SYSTEM_PROMPT
+from app.services.commerce_agent import MAYA_SYSTEM_PROMPT
 from app.services.tool_executor import register_session, unregister_session
+from app.services.commerce_tool_executor import (
+    register_session as register_commerce_session,
+    unregister_session as unregister_commerce_session,
+)
 
 router = APIRouter(prefix="/agora", tags=["agora"])
 
@@ -45,7 +51,7 @@ class TokenRequest(BaseModel):
 
 
 class ConvoStartRequest(BaseModel):
-    channel_name: str = "workflow-ph-cae"
+    channel_name: str = "fflow-ph-cae"
     user_uid: str = "1002"
     agent_uid: str = "1001"
     agent_name: str | None = None
@@ -55,17 +61,20 @@ class ConvoStartRequest(BaseModel):
     tts_speed: float | None = None
     audio_scenario: str | None = None
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
+    # FFlow PH extension — selects which agent persona + tool set + custom LLM endpoint
+    # the Agora session attaches to. "sales" (default, Faye/B2B) keeps existing behavior.
+    agent_type: str = "sales"
 
 
 class ConvoUserTokenRequest(BaseModel):
-    channel_name: str = "workflow-ph-cae"
+    channel_name: str = "fflow-ph-cae"
     user_uid: str = "1002"
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
 
 class CaeAgentRequest(BaseModel):
     agent_id: str
-    channel_name: str = "workflow-ph-cae"
+    channel_name: str = "fflow-ph-cae"
     agent_uid: str = "1001"
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
@@ -221,6 +230,31 @@ def _validate_agent_context(req: CaeAgentRequest) -> tuple[str, str, str]:
     return channel_name, agent_uid, agent_id
 
 
+def _agent_type(req: ConvoStartRequest) -> str:
+    return "commerce" if (req.agent_type or "").lower() == "commerce" else "sales"
+
+
+def _greeting_for(agent_type: str) -> str:
+    if agent_type == "commerce":
+        return (
+            "Hi! I'm Maya, your shopping assistant from FFlow PH. "
+            "I can help you find the perfect pair of shoes. "
+            "Before we start, may I know your name?"
+        )
+    return "Hi! I'm Faye, a business consultant from FFlow PH specializing in logistics and marketing. Before we dive in, may I know your name?"
+
+
+def _system_prompt_for(agent_type: str) -> str:
+    return MAYA_SYSTEM_PROMPT if agent_type == "commerce" else SYSTEM_PROMPT
+
+
+def _llm_url_for(agent_type: str, channel_name: str) -> str:
+    base = settings.backend_public_url.rstrip("/")
+    if agent_type == "commerce":
+        return f"{base}/commerce/chat/completions?channel={channel_name}"
+    return f"{base}/chat/completions?channel={channel_name}"
+
+
 def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: str, agent_uid: str) -> dict[str, Any]:
     interruption = {
         "enable": True,
@@ -277,22 +311,22 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
         },
         "tts": {
             "params": {
-                "voice": (req.tts_voice or settings.agora_convo_default_tts_voice),
+                "voice": req.tts_voice or ("alloy" if _agent_type(req) == "commerce" else settings.agora_convo_default_tts_voice),
                 "speed": max(0.25, min(4.0, req.tts_speed if req.tts_speed is not None else settings.agora_convo_default_tts_speed)),
             }
         },
         "llm": {
             **(
                 {
-                    "url": f"{settings.backend_public_url.rstrip('/')}/chat/completions?channel={_validate_channel_name(req.channel_name)}",
+                    "url": _llm_url_for(_agent_type(req), _validate_channel_name(req.channel_name)),
                     "api_key": settings.custom_llm_api_key or "no-key",
-                    "greeting_message": "Hi! I'm Faye, a business consultant from Workflow PH specializing in logistics and marketing. Before we dive in, may I know your name?",
+                    "greeting_message": _greeting_for(_agent_type(req)),
                 }
                 if settings.backend_public_url
                 else {}
             ),
             "system_messages": [
-                {"role": "system", "content": SYSTEM_PROMPT}
+                {"role": "system", "content": _system_prompt_for(_agent_type(req))}
             ],
         },
     }
@@ -675,13 +709,43 @@ async def start_conversational_agent(req: ConvoStartRequest):
     _require_token_issuer_auth()
     data = await _join_agent(req)
 
-    # Create lead + conversation docs and register the session so tool_executor
-    # can find them when Agora calls /chat/completions for this channel.
+    agent_type = _agent_type(req)
     channel_name = _validate_channel_name(req.channel_name)
     ts = datetime.now(timezone.utc).isoformat()
-    lead_id = f"lead::{uuid.uuid4()}"
     conversation_id = f"conversation::{uuid.uuid4()}"
 
+    if agent_type == "commerce":
+        customer_id = f"customer::{uuid.uuid4()}"
+        try:
+            import time as _time
+            customer = Customer(created_at=ts, updated_at=ts)
+            conversation = Conversation(lead_id=customer_id, created_at=ts, updated_at=ts)
+            for attempt in range(2):
+                try:
+                    get_collection("customers").insert(customer_id, customer.model_dump())
+                    get_collection("conversations").insert(conversation_id, conversation.model_dump())
+                    break
+                except Exception as inner_exc:
+                    if attempt == 0:
+                        logger.warning("Couchbase commerce insert attempt 1 failed (%s), retrying…", inner_exc)
+                        _time.sleep(0.5)
+                    else:
+                        raise
+            data["customer_id"] = customer_id
+            data["conversation_id"] = conversation_id
+            data["agent_type"] = "commerce"
+            logger.info(
+                "Commerce session registered: channel=%r  customer_id=%r  conversation_id=%r",
+                channel_name, customer_id, conversation_id,
+            )
+        except Exception as exc:
+            logger.warning("Failed to create customer/conversation docs: %s", exc)
+
+        register_commerce_session(channel_name, customer_id, conversation_id)
+        return data
+
+    # Default: B2B sales path
+    lead_id = f"lead::{uuid.uuid4()}"
     try:
         import time as _time
         lead = Lead(created_at=ts, updated_at=ts)
@@ -699,16 +763,15 @@ async def start_conversational_agent(req: ConvoStartRequest):
                     raise
         data["lead_id"] = lead_id
         data["conversation_id"] = conversation_id
+        data["agent_type"] = "sales"
         logger.info(
-            "Session registered: channel=%r  lead_id=%r  conversation_id=%r",
+            "Sales session registered: channel=%r  lead_id=%r  conversation_id=%r",
             channel_name, lead_id, conversation_id,
         )
     except Exception as exc:
         logger.warning("Failed to create lead/conversation docs: %s", exc)
 
-    # Always register so tool_executor can find this lead even when Couchbase is slow.
     register_session(channel_name, lead_id, conversation_id)
-
     return data
 
 
@@ -737,7 +800,10 @@ async def create_convo_user_token(req: ConvoUserTokenRequest):
 async def stop_conversational_agent(req: CaeAgentRequest):
     _require_token_issuer_auth()
     data = await _leave_agent(req)
-    unregister_session(_validate_channel_name(req.channel_name))
+    channel = _validate_channel_name(req.channel_name)
+    # Unregister from both executors — only one will actually have an entry.
+    unregister_session(channel)
+    unregister_commerce_session(channel)
     return {"ok": True, "agent_id": data["agent_id"]}
 
 

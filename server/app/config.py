@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     couchbase_connection_string: str = ""
     couchbase_username: str = ""
     couchbase_password: str = ""
-    couchbase_bucket: str = "workflow_ph"
+    couchbase_bucket: str = "fewa-workflow-ph"
     couchbase_scope: str = "sales_agent"
 
     agora_app_id: str = ""

@@ -12,7 +12,14 @@ logger = logging.getLogger(__name__)
 _cluster: Cluster | None = None
 _collections: dict[str, object] = {}  # collection-name → cached Collection object
 
-REQUIRED_COLLECTIONS = ["leads", "conversations", "follow_ups"]
+REQUIRED_COLLECTIONS = [
+    "leads",
+    "conversations",
+    "follow_ups",
+    "customers",
+    "orders",
+    "products",
+]
 
 
 def get_cluster() -> Cluster:

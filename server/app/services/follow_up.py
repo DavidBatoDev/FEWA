@@ -19,7 +19,7 @@ async def generate_follow_up(lead: Lead) -> dict[str, str]:
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    prompt = f"""You are a professional sales follow-up writer for Workflow PH.
+    prompt = f"""You are a professional sales follow-up writer for FFlow PH.
 
 Lead profile:
 - Company: {lead.company or "Unknown"}
