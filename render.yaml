@@ -1,0 +1,63 @@
+services:
+  - type: web
+    name: agora-ai-backend
+    runtime: python
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    region: singapore
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: COUCHBASE_CONNECTION_STRING
+        sync: false
+      - key: COUCHBASE_USERNAME
+        sync: false
+      - key: COUCHBASE_PASSWORD
+        sync: false
+      - key: COUCHBASE_BUCKET
+        value: fewa-workflow-ph
+      - key: COUCHBASE_SCOPE
+        value: sales_agent
+      - key: COUCHBASE_SCOPE_B2B
+        value: b2b
+      - key: COUCHBASE_SCOPE_B2C
+        value: b2c
+      - key: AGORA_APP_ID
+        sync: false
+      - key: AGORA_APP_CERTIFICATE
+        sync: false
+      - key: AGORA_CONVO_API_BASE
+        value: https://api.agora.io
+      - key: AGORA_CONVO_DEFAULT_PRESET
+        value: openai_gpt_4o_mini,openai_tts_1
+      - key: AGORA_CONVO_DEFAULT_TTS_VOICE
+        value: coral
+      - key: AGORA_CONVO_DEFAULT_AUDIO_SCENARIO
+        value: aiserver
+      - key: AGORA_CONVO_DEFAULT_IDLE_TIMEOUT
+        value: 0
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: CUSTOM_LLM_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: Workflow PH
+      - key: SMTP_USE_TLS
+        value: true
+      - key: SMTP_TIMEOUT_SECONDS
+        value: 10
