@@ -1,5 +1,6 @@
 import re
 import uuid
+from typing import Optional
 
 from couchbase.exceptions import CouchbaseException
 from fastapi import APIRouter, HTTPException
@@ -8,6 +9,8 @@ from pydantic import BaseModel
 from app.db.couchbase import get_collection, get_scope
 from app.models.lead import Lead
 from app.services.sales_workflow import now_iso
+from app.services.lead_scorer import score_lead
+from app.services.offer_recommender import recommend_offer
 
 router = APIRouter(prefix="/intake-forms", tags=["intake_forms"])
 
@@ -19,6 +22,13 @@ class IntakeFormCreateRequest(BaseModel):
     company_description: str = ""
     email: str
     pain_points: list[str]
+    contact_name: Optional[str] = None
+    target_clients: Optional[str] = None
+    urgency: Optional[str] = None
+    budget_readiness: Optional[str] = None
+    decision_maker: Optional[str] = None
+    preferred_next_step: Optional[str] = None
+    uploaded_pdf_id: Optional[str] = None
 
 
 def _normalize_pain_points(pain_points: list[str]) -> list[str]:
@@ -51,16 +61,28 @@ async def create_intake_form(payload: IntakeFormCreateRequest):
     intake_id = f"intake::{uuid.uuid4()}"
 
     lead = Lead(
+        name=payload.contact_name,
         company=company_name,
         email=email,
-        pain_point=pain_points[0],
+        pain_point=pain_points[0] if pain_points else None,
+        timeline=payload.urgency,
+        budget_readiness=payload.budget_readiness,
+        decision_maker=payload.decision_maker,
+        next_best_action=payload.preferred_next_step,
         status="new",
         intake_form_id=intake_id,
-        context_status="none",
+        context_status="pending" if payload.uploaded_pdf_id else "none",
         call_status="not_booked",
         created_at=ts,
         updated_at=ts,
     )
+
+    # Perform initial lead scoring and offer recommendation
+    score, temperature, breakdown = score_lead(lead)
+    lead.lead_score = score
+    lead.lead_temperature = temperature
+    lead.score_breakdown = breakdown
+    lead.recommended_offer = recommend_offer(lead)
 
     intake_doc = {
         "type": "intake_form",
@@ -69,6 +91,13 @@ async def create_intake_form(payload: IntakeFormCreateRequest):
         "company_description": company_description,
         "email": email,
         "pain_points": pain_points,
+        "contact_name": payload.contact_name,
+        "target_clients": payload.target_clients,
+        "urgency": payload.urgency,
+        "budget_readiness": payload.budget_readiness,
+        "decision_maker": payload.decision_maker,
+        "preferred_next_step": payload.preferred_next_step,
+        "uploaded_pdf_id": payload.uploaded_pdf_id,
         "status": "submitted",
         "created_at": ts,
         "updated_at": ts,
