@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { AgentCard } from "@/components/AgentCard";
 import { CommerceDemo } from "@/components/CommerceDemo";
@@ -71,14 +71,10 @@ export default function LandingPage() {
   const [demoMode, setDemoMode] = useState<"b2b" | "b2c">("b2b");
   const [animateDemoKey, setAnimateDemoKey] = useState(0);
   const [simStep, setSimStep] = useState(1);
+  const demoRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSimStep(prev => (prev % 6) + 1);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
   const [globalMode, setGlobalMode] = useState<"b2b" | "b2c">("b2b");
+  const [activeSection, setActiveSection] = useState<string>("agents");
 
   const handleSetGlobalMode = (mode: "b2b" | "b2c") => {
     setGlobalMode(mode);
@@ -86,6 +82,7 @@ export default function LandingPage() {
     setDemoMode(mode);
     setAnimateKey(prev => prev + 1);
     setAnimateDemoKey(prev => prev + 1);
+    setActiveSection("agents");
   };
 
   const salesLogs = [
@@ -112,9 +109,28 @@ export default function LandingPage() {
     setMounted(true);
 
     const handleScroll = () => {
+      // Overall scroll progress
       const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
       if (totalScroll > 0) {
         setScrollProgress((window.scrollY / totalScroll) * 100);
+      }
+
+      // LOCAL SCROLL LOGIC FOR DEMO (Scrollytelling)
+      if (demoRef.current) {
+        const rect = demoRef.current.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        // When the demo section enters/is in the viewport
+        if (rect.top < viewportHeight && rect.bottom > 0) {
+          // Map vertical scroll through the demo section to steps 1-6
+          const visibleHeight = viewportHeight + rect.height;
+          const currentVisible = viewportHeight - rect.top;
+          const progress = Math.max(0, Math.min(1, currentVisible / visibleHeight));
+          
+          // Map to 6 steps of the simulation
+          const step = Math.min(6, Math.max(1, Math.ceil(progress * 7))); 
+          setSimStep(step);
+        }
       }
     };
     window.addEventListener("scroll", handleScroll);
@@ -150,14 +166,34 @@ export default function LandingPage() {
         </a>
         
         <div className="hidden md:flex items-center gap-6 text-xs font-semibold text-zinc-400 tracking-wider uppercase">
-          <a href="#mode-selector" className="hover:text-white transition-all duration-200">
+          <Link 
+            href="/campaign?type=sales" 
+            onClick={() => setActiveSection("agents")}
+            className={`transition-all duration-200 hover:text-white ${activeSection === 'agents' ? (globalMode === 'b2b' ? 'text-cyan-400 font-bold' : 'text-purple-400 font-bold') : ''}`}
+          >
             {globalMode === 'b2b' ? 'B2B Agents' : 'B2C Agents'}
-          </a>
-          <a href="#demo-booking" className={`hover:text-white transition-all duration-200 font-bold ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>
+          </Link>
+          <a 
+            href="#demo-booking" 
+            onClick={() => setActiveSection("demo")}
+            className={`transition-all duration-200 hover:text-white font-bold ${activeSection === 'demo' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+          >
             {globalMode === 'b2b' ? 'Sales Demo' : 'Store Demo'}
           </a>
-          <Link href="/comparison" className="hover:text-white transition-all duration-200">Comparison</Link>
-          <a href="#tech-stack" className="hover:text-white transition-all duration-200">Stack</a>
+          <Link 
+            href="/comparison" 
+            onClick={() => setActiveSection("comparison")}
+            className={`transition-all duration-200 hover:text-white ${activeSection === 'comparison' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+          >
+            Comparison
+          </Link>
+          <a 
+            href="#tech-stack" 
+            onClick={() => setActiveSection("stack")}
+            className={`transition-all duration-200 hover:text-white ${activeSection === 'stack' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+          >
+            Stack
+          </a>
           <Link href="/dashboard" className="hover:text-white transition-all duration-200 flex items-center gap-1">
             <BarChart3 className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
             Dashboard
@@ -395,13 +431,13 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
-              <a 
-                href="#agents"
+              <Link 
+                href="/campaign?type=sales"
                 className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
               >
                 <span>{globalMode === 'b2b' ? 'View B2B Agents' : 'View B2C Agents'}</span>
                 <ArrowRight className="w-5 h-5" />
-              </a>
+              </Link>
               <Link
                 href="/dashboard"
                 className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
@@ -734,7 +770,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="max-w-5xl mx-auto h-[800px] flex flex-col relative z-20">
+                <div className="max-w-5xl mx-auto h-[800px] flex flex-col relative z-20" ref={demoRef}>
                   <FayeDashboard 
                     type={demoMode === "b2b" ? "sales" : "commerce"} 
                     transcript={[]} 

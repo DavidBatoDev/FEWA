@@ -23,6 +23,7 @@ import {
   Clipboard,
   Check
 } from "lucide-react";
+import { BarChart, LineChart, DonutChart } from "@/components/DashboardCharts";
 
 // Mock B2B Leads for fallback
 const MOCK_B2B_LEADS = [
@@ -292,6 +293,43 @@ export default function UnifiedDashboard() {
     return `Hi ${lead.name},\n\nThank you for taking the time to speak with our AI agent today regarding ${lead.company}'s operations. We noted your concern regarding "${lead.pain_point}" and that you are looking to get this fixed ${lead.timeline}.\n\nBased on your profile, we highly recommend our "${lead.recommended_offer}". This package will extend Agora's voice platform with structured lead qualification, real-time lead score dashboards, and custom follow-up pipelines to eliminate callback delays.\n\nNext Action: ${lead.next_best_action}.\n\nBest regards,\nFFlow.ph Sales Team`;
   };
 
+  // B2B Chart Data
+  const b2bWeeklyData = [
+    { label: "Mon", value: 12 },
+    { label: "Tue", value: 18 },
+    { label: "Wed", value: 24 },
+    { label: "Thu", value: 15 },
+    { label: "Fri", value: 28 },
+    { label: "Sat", value: 8 },
+    { label: "Sun", value: 5 },
+  ];
+
+  const b2bScoreData = [
+    { label: "0-20", value: 5 },
+    { label: "21-40", value: 8 },
+    { label: "41-60", value: 15 },
+    { label: "61-80", value: 22 },
+    { label: "81-100", value: 12 },
+  ];
+
+  // B2C Chart Data
+  const b2cSalesTrend = [
+    { label: "May 21", value: 45000 },
+    { label: "May 22", value: 52000 },
+    { label: "May 23", value: 38000 },
+    { label: "May 24", value: 61000 },
+    { label: "May 25", value: 49000 },
+    { label: "May 26", value: 58000 },
+    { label: "May 27", value: 72000 },
+  ];
+
+  const b2cCategoryData = [
+    { label: "Laptops", value: 158000 },
+    { label: "Accessories", value: 42000 },
+    { label: "Tablets", value: 25000 },
+    { label: "Monitors", value: 18000 },
+  ];
+
   return (
     <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
       
@@ -398,6 +436,16 @@ export default function UnifiedDashboard() {
                 <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 block mb-1">Follow-ups Drafted</span>
                 <div className="text-2xl font-black text-emerald-400">{stats.follow_ups_generated}</div>
                 <div className="text-[10px] text-zinc-500 mt-1">Automated emails drafted</div>
+              </div>
+            </div>
+
+            {/* B2B Visual Analytics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="p-6 rounded-3xl border border-white/[0.06] bg-zinc-900/30 backdrop-blur-xl">
+                <LineChart data={b2bWeeklyData} title="Weekly Qualification Velocity" color="cyan" />
+              </div>
+              <div className="p-6 rounded-3xl border border-white/[0.06] bg-zinc-900/30 backdrop-blur-xl">
+                <BarChart data={b2bScoreData} title="Lead Score Bucket Distribution" color="cyan" />
               </div>
             </div>
 
@@ -712,6 +760,16 @@ export default function UnifiedDashboard() {
                 <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 block mb-1">GCash Ref Verified</span>
                 <div className="text-2xl font-black text-emerald-400">3/4</div>
                 <div className="text-[10px] text-zinc-500 mt-1">Ref check via tool calling</div>
+              </div>
+            </div>
+
+            {/* B2C Visual Analytics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="p-6 rounded-3xl border border-white/[0.06] bg-zinc-900/30 backdrop-blur-xl">
+                <LineChart data={b2cSalesTrend} title="Daily Revenue Intake (PHP)" color="purple" />
+              </div>
+              <div className="p-6 rounded-3xl border border-white/[0.06] bg-zinc-900/30 backdrop-blur-xl">
+                <DonutChart data={b2cCategoryData} title="Catalog Revenue Distribution" color="purple" />
               </div>
             </div>
 
