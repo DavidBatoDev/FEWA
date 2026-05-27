@@ -132,3 +132,17 @@ Body:
 - Add `POST /leads/{lead_id}/book-call` and `GET /leads/{lead_id}/book-calls`, and mirror latest call summary to lead fields (`call_status`, `call_slot`, `next_best_action`).
 Assignee: `@<backend-teammate>`
 Label: `backend`
+
+### 18) [Frontend] Build and refine lead intake forms with optional PDF upload
+Body:
+- Build and refine the frontend lead intake forms to capture name, description, pain point, clients want to find, urgency, budget readiness, decision-maker status, and preferred next step.
+- Support optional PDF upload (linking to `POST /leads/{lead_id}/context-docs`) and integrate form submission with `POST /intake-forms` for NoSQL storing with the ultimate goal of booking a discovery call.
+Assignee: `@<frontend-teammate>`
+Label: `frontend`
+
+### 19) [Backend] Refine intake forms schema and Couchbase lead mapping
+Body:
+- Expand `POST /intake-forms` and `IntakeFormCreateRequest` schema to support: contact name, company description, pain points, target clients, urgency, budget readiness, decision-maker status, preferred next step, and optional PDF attachment.
+- Persist the refined fields to the Couchbase `intake_forms` document and automatically map them to the linked `leads` document fields, making them ready for downstream AI scoring and discovery calls.
+Assignee: `@<backend-teammate>`
+Label: `backend`
