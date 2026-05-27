@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     couchbase_password: str = ""
     couchbase_bucket: str = "workflow_ph"
     couchbase_scope: str = "sales_agent"
+    offers_cache_ttl_seconds: int = 300
 
     agora_app_id: str = ""
     agora_app_certificate: str = ""
