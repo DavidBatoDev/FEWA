@@ -1385,14 +1385,55 @@ export default function AgentPage() {
                 {errorMessage && <p className="text-red-500 mt-2 font-mono">{errorMessage}</p>}
               </div>
 
-              <div className="flex flex-col gap-3 text-sm">
-                <div>
-                  <label className="text-white/40 text-[10px] uppercase tracking-wider block mb-1.5">Channel Name</label>
+              {/* Setup Configuration */}
+              <div className="rounded-2xl border border-white/[0.06] bg-zinc-900/30 p-4 flex flex-col gap-3">
+                <h2 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Manual Setup overrides</h2>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Channel</label>
+                    <input
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Voice</label>
+                    <select
+                      value={voice}
+                      onChange={(e) => setVoice(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 outline-none disabled:opacity-60"
+                    >
+                      {VOICE_DATA.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">User UID</label>
+                    <input
+                      value={userUid}
+                      onChange={(e) => setUserUid(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Agent UID</label>
+                    <input
+                      value={agentUid}
+                      onChange={(e) => setAgentUid(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-[10px] mt-1 text-zinc-500">
                   <input
-                    value={channelName}
-                    onChange={(e) => setChannelName(e.target.value)}
-                    disabled={isActive || isStarting}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white outline-none focus:border-emerald-400/60 focus:ring-1 focus:ring-emerald-400/30 disabled:opacity-50 text-sm"
+                    type="checkbox"
+                    checked={autoHalfDuplex}
+                    onChange={(e) => onHalfDuplexToggle(e.target.checked)}
+                    className="rounded text-cyan-500 focus:ring-cyan-500"
                   />
                   Auto half-duplex (mute mic when agent speaks)
                 </label>
