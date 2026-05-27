@@ -6,10 +6,12 @@ This folder contains scripts to bootstrap and verify Couchbase for Workflow PH A
 
 - `setup_collections.py`
   - Creates scopes from `COUCHBASE_PROVISION_SCOPES` (default: `sales_agent,b2b,b2c`)
-  - Creates collections: `campaigns`, `leads`, `conversations`, `offers`, `follow_ups`, `intake_forms`, `lead_context_docs`, `discovery_calls`
+  - Creates collections: `campaigns`, `leads`, `products`, `orders`, `conversations`, `offers`, `follow_ups`, `intake_forms`, `lead_context_docs`, `discovery_calls`
   - Creates indexes used by dashboard/API queries
 - `seed_offers.py`
   - Inserts the four default offer documents into `offers` for scopes in `COUCHBASE_SEED_SCOPES` (default: `sales_agent,b2b,b2c`)
+- `seed_products.py`
+  - Inserts a mock B2C product catalog into `products` for scopes in `COUCHBASE_SEED_SCOPES` (default: `sales_agent,b2b,b2c`)
 
 Both scripts are idempotent and safe to re-run.
 
@@ -27,6 +29,7 @@ From repo root:
 ```powershell
 python couchbase/setup_collections.py
 python couchbase/seed_offers.py
+python couchbase/seed_products.py
 ```
 
 ## cbsh workflow (Windows, Capella)

@@ -7,7 +7,7 @@ from couchbase.options import ClusterOptions
 from app.config import settings
 
 _cluster: Cluster | None = None
-_request_scope_override: ContextVar[str | None] = ContextVar("request_scope_override", default=None)
+_request_context: ContextVar[dict[str, str] | None] = ContextVar("request_context", default=None)
 
 
 def _resolve_scope_for_flow(flow: str | None) -> str:
@@ -22,17 +22,41 @@ def _resolve_scope_for_flow(flow: str | None) -> str:
     return settings.couchbase_scope
 
 
+def _normalize_flow(flow: str | None) -> str:
+    if not flow:
+        return ""
+    flow_key = flow.strip().lower()
+    if flow_key in {"b2b", "b2c"}:
+        return flow_key
+    return ""
+
+
 def set_request_scope_from_flow(flow: str | None) -> Token:
     scope_name = _resolve_scope_for_flow(flow)
-    return _request_scope_override.set(scope_name)
+    normalized_flow = _normalize_flow(flow)
+    return _request_context.set({"scope": scope_name, "flow": normalized_flow})
 
 
 def reset_request_scope(token: Token) -> None:
-    _request_scope_override.reset(token)
+    _request_context.reset(token)
 
 
 def get_active_scope_name() -> str:
-    return _request_scope_override.get() or settings.couchbase_scope
+    ctx = _request_context.get()
+    if not ctx:
+        return settings.couchbase_scope
+    return ctx.get("scope") or settings.couchbase_scope
+
+
+def get_active_flow() -> str:
+    ctx = _request_context.get()
+    if ctx and ctx.get("flow"):
+        return ctx["flow"]
+
+    active_scope = get_active_scope_name()
+    if active_scope == settings.couchbase_scope_b2c:
+        return "b2c"
+    return "b2b"
 
 
 def get_cluster() -> Cluster:

@@ -1,25 +1,11 @@
 from openai import AsyncOpenAI
 from app.config import settings
+from app.db.couchbase import get_active_flow
 from app.models.conversation import TranscriptEntry
 from app.models.lead import Lead, LeadTemperature
+from app.services.prompt_registry import B2B_SALES_PROMPT, get_system_prompt
 
-SYSTEM_PROMPT = """You are Workflow PH Sales Agent, a real-time AI sales qualification agent for Philippine service businesses. You are powered by GPT-4o mini.
-
-Your job is to hold a natural sales conversation while moving the lead toward a clear business outcome.
-
-You must:
-1. Understand the customer's business and main problem.
-2. Ask short, natural discovery questions one at a time.
-3. Identify pain point, urgency, budget readiness, decision-maker status, and preferred next step.
-4. Detect objections and buying signals.
-5. Recommend the most relevant service package only after enough context is gathered.
-6. Score the lead as Hot, Warm, or Cold.
-7. Prepare a concise sales summary for the human sales team.
-8. Never pressure the user.
-9. Never overpromise.
-10. If unsure, suggest a human consultation.
-
-Your style is helpful, consultative, confident, friendly, and concise. Ask one question at a time."""
+SYSTEM_PROMPT = B2B_SALES_PROMPT
 
 
 def _has_openai_key() -> bool:
@@ -27,6 +13,9 @@ def _has_openai_key() -> bool:
 
 
 def _offline_response(transcript: list[TranscriptEntry], language_mode: str = "English") -> str:
+    if get_active_flow() == "b2c":
+        return _offline_response_b2c(transcript, language_mode)
+
     full_text = " ".join([entry.message.lower() for entry in transcript if entry.role == "user"])
 
     if "timeline" not in full_text and "month" not in full_text and "urgent" not in full_text:
@@ -43,6 +32,19 @@ def _offline_response(transcript: list[TranscriptEntry], language_mode: str = "E
     return "Based on what you shared, the Sales Automation Package looks like the best fit. Would you like to book a short discovery call next?"
 
 
+def _offline_response_b2c(transcript: list[TranscriptEntry], language_mode: str = "English") -> str:
+    full_text = " ".join([entry.message.lower() for entry in transcript if entry.role == "user"])
+    if "budget" not in full_text and "price" not in full_text:
+        return "Got it. What's your budget range so I can suggest the best options?"
+    if "use" not in full_text and "for" not in full_text:
+        return "Nice. What will you mainly use it for so I can narrow the choices?"
+    if "brand" not in full_text:
+        return "Any brand preference, or are you open to any good option?"
+    if language_mode == "Taglish":
+        return "Based sa budget at use case mo, I can suggest a few options. Gusto mo i-compare natin yung top picks?"
+    return "Based on your budget and use case, I can suggest a few options. Want me to compare the top picks?"
+
+
 async def get_agent_response(
     transcript: list[TranscriptEntry],
     language_mode: str = "English",
@@ -52,7 +54,7 @@ async def get_agent_response(
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    system = SYSTEM_PROMPT
+    system = get_system_prompt()
     if language_mode == "Taglish":
         system += "\n\nSpeak in natural Taglish, a mix of Filipino and English common in the Philippines."
 

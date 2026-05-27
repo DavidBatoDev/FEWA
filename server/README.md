@@ -60,6 +60,7 @@ From repo root:
 ```powershell
 python couchbase/setup_collections.py
 python couchbase/seed_offers.py
+python couchbase/seed_products.py
 ```
 
 ## 5) Run API

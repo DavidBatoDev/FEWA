@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import agent, leads, agora, campaigns, dashboard, intake_forms
+from app.routes import agent, leads, agora, campaigns, dashboard, intake_forms, products, orders
 from app.db.couchbase import reset_request_scope, set_request_scope_from_flow
 
 app = FastAPI(
@@ -23,6 +23,8 @@ app.include_router(leads.router)
 app.include_router(agora.router)
 app.include_router(campaigns.router)
 app.include_router(dashboard.router)
+app.include_router(products.router)
+app.include_router(orders.router)
 
 
 @app.middleware("http")

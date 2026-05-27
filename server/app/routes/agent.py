@@ -6,18 +6,19 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.models.lead import Lead
 from app.models.conversation import Conversation, TranscriptEntry
-from app.services.ai_agent import SYSTEM_PROMPT, get_agent_response, generate_conversation_summary
+from app.services.ai_agent import get_agent_response, generate_conversation_summary
 from app.services.agent_tools import (
     SALES_AGENT_TOOLS,
     TOOL_RUNTIME_INSTRUCTIONS,
     execute_agent_tool_calls,
 )
+from app.services.prompt_registry import get_system_prompt
 from app.services.sales_workflow import (
     create_lead_and_conversation,
     now_iso,
     refresh_sales_state_from_transcript,
 )
-from app.db.couchbase import get_collection
+from app.db.couchbase import get_active_flow, get_collection
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -43,11 +44,18 @@ async def start_conversation(req: StartRequest):
     try:
         lead_id, conversation_id, _, _ = create_lead_and_conversation(campaign_id=req.campaign_id)
 
-        greeting = (
-            "Hi! I'm the Workflow PH Sales Agent. "
-            "I'm here to help understand your business and find the best solution for you. "
-            "Can you tell me a little about your business and what you're looking to improve?"
-        )
+        if get_active_flow() == "b2c":
+            greeting = (
+                "Hi! I'm the Workflow PH Commerce Agent. "
+                "I can help you find the right product and guide you through checkout. "
+                "What kind of product are you looking for today?"
+            )
+        else:
+            greeting = (
+                "Hi! I'm the Workflow PH Sales Agent. "
+                "I'm here to help understand your business and find the best solution for you. "
+                "Can you tell me a little about your business and what you're looking to improve?"
+            )
 
         return {
             "lead_id": lead_id,
@@ -88,27 +96,37 @@ async def handle_message(req: MessageRequest):
         has_openai_key = bool(settings.openai_api_key and settings.openai_api_key.strip())
         if has_openai_key:
             client = AsyncOpenAI(api_key=settings.openai_api_key)
-            system = SYSTEM_PROMPT
+            active_flow = get_active_flow()
+            system = get_system_prompt(active_flow)
             if req.language_mode == "Taglish":
                 system += "\n\nSpeak in natural Taglish, a mix of Filipino and English common in the Philippines."
-            system += "\n\n" + TOOL_RUNTIME_INSTRUCTIONS
 
             messages: list[dict] = [{"role": "system", "content": system}]
             for entry in conversation.transcript:
                 messages.append({"role": entry.role, "content": entry.message})
 
-            first_response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                tools=SALES_AGENT_TOOLS,
-                tool_choice="auto",
-                temperature=0.4,
-                max_tokens=300,
-            )
+            if active_flow == "b2b":
+                system += "\n\n" + TOOL_RUNTIME_INSTRUCTIONS
+                messages[0] = {"role": "system", "content": system}
+                first_response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    tools=SALES_AGENT_TOOLS,
+                    tool_choice="auto",
+                    temperature=0.4,
+                    max_tokens=300,
+                )
+            else:
+                first_response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=300,
+                )
             first_msg = first_response.choices[0].message
             first_tool_calls = first_msg.tool_calls or []
 
-            if first_tool_calls:
+            if active_flow == "b2b" and first_tool_calls:
                 normalized_calls: list[dict] = []
                 tool_calls_for_message: list[dict] = []
                 for tc in first_tool_calls:
