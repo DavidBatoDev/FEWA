@@ -1,0 +1,71 @@
+# PDF Extraction Tests
+
+This directory contains test files for the PDF extraction feature.
+
+## Test Files
+
+### Unit Tests
+- **test_pdf_extraction.py** - Unit tests for individual extraction functions
+  - PDF text extraction with error handling
+  - AI-powered business data extraction
+  - Hybrid lead field merging strategy
+
+### Integration Tests
+- **test_pdf_integration.py** - Integration tests with real PDF files
+  - Real PDF text extraction
+  - AI extraction with sample business document
+  - Field extraction verification
+
+### Direct Function Tests
+- **test_direct_functions.py** - Direct function tests without server
+  - Complete PDF extraction flow
+  - Error handling tests
+  - Field merging tests
+
+### API Tests
+- **test_api_integration.py** - End-to-end API tests (requires server running)
+  - Intake form submission without PDF
+  - Intake form submission with PDF
+  - Manual extraction endpoint
+  - Lead data verification
+
+## Running Tests
+
+### Run Unit Tests
+```bash
+cd server
+.venv/bin/python tests/test_pdf_extraction.py
+```
+
+### Run Integration Tests
+```bash
+cd server
+.venv/bin/python tests/test_pdf_integration.py
+```
+
+### Run Direct Function Tests
+```bash
+cd server
+.venv/bin/python tests/test_direct_functions.py
+```
+
+### Run API Tests (requires server running)
+```bash
+# Terminal 1: Start server
+cd server
+.venv/bin/python run.py
+
+# Terminal 2: Run tests
+cd server
+.venv/bin/python tests/test_api_integration.py
+```
+
+## Test Requirements
+
+- pymupdf==1.24.0 (for PDF parsing)
+- OpenAI API key (optional, falls back to keyword extraction)
+- Test PDF file: `uploads/test-business-doc.pdf`
+
+## Test Results
+
+See `docs/TEST_RESULTS.md` for detailed test results and metrics.
