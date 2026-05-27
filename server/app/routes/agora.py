@@ -1,8 +1,12 @@
+import json
+import logging
 import re
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from agora_agent.agentkit.token import generate_convo_ai_token
@@ -18,6 +22,7 @@ from app.models.conversation import Conversation
 from app.models.lead import Lead
 from app.services.prompt_registry import get_system_prompt
 from app.services.sales_workflow import append_turn_and_refresh_sales_state, create_lead_and_conversation
+from app.services.tool_executor import register_session, unregister_session
 
 router = APIRouter(prefix="/agora", tags=["agora"])
 
@@ -49,6 +54,7 @@ class ConvoStartRequest(BaseModel):
     preset: str | None = None
     pipeline_id: str | None = None
     tts_voice: str | None = None
+    tts_speed: float | None = None
     audio_scenario: str | None = None
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
@@ -291,6 +297,7 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
         "tts": {
             "params": {
                 "voice": (req.tts_voice or settings.agora_convo_default_tts_voice),
+                "speed": max(0.25, min(4.0, req.tts_speed if req.tts_speed is not None else settings.agora_convo_default_tts_speed)),
             }
         },
         "llm": {

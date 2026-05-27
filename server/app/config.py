@@ -20,8 +20,11 @@ class Settings(BaseSettings):
     agora_convo_default_pipeline_id: str = ""
     agora_convo_default_preset: str = "openai_gpt_4o_mini,openai_tts_1"
     agora_convo_default_tts_voice: str = "coral"
+    agora_convo_default_tts_speed: float = 1.2
     agora_convo_default_audio_scenario: str = "aiserver"
     agora_convo_default_idle_timeout: int = 0
+    backend_public_url: str = ""
+    custom_llm_api_key: str = ""
 
 
 settings = Settings()
