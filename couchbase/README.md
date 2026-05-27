@@ -2,6 +2,9 @@
 
 This folder contains scripts to bootstrap and verify Couchbase for Workflow PH AI Sales Agent.
 
+Schema reference:
+- `docs/b2b-b2c-schema-context.md` (B2B/B2C document schemas, key patterns, and collection context)
+
 ## What these scripts do
 
 - `setup_collections.py`

@@ -2,6 +2,9 @@
 
 This backend powers the Workflow PH AI Sales Agent MVP.
 
+Schema context:
+- See `docs/b2b-b2c-schema-context.md` for current B2B/B2C Couchbase document schemas and key formats.
+
 ## 1) Create and activate venv
 
 From the `server` directory:
