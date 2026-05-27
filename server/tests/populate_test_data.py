@@ -24,6 +24,7 @@ except ImportError:
     import httpx
 
 BASE_URL = "http://localhost:8000"
+B2B_HEADERS = {"x-sales-flow": "b2b"}  # Route to B2B scope
 
 
 def print_section(title):
@@ -80,7 +81,7 @@ def create_intake_without_pdf():
     print(f"Payload: {json.dumps(payload, indent=2)}")
     
     try:
-        response = httpx.post(f"{BASE_URL}/intake-forms", json=payload, timeout=10.0)
+        response = httpx.post(f"{BASE_URL}/intake-forms", json=payload, headers=B2B_HEADERS, timeout=10.0)
         
         if response.status_code == 200:
             data = response.json()
@@ -134,7 +135,7 @@ def create_intake_with_pdf():
     print("\n⏳ Processing... (PDF extraction may take 3-5 seconds)")
     
     try:
-        response = httpx.post(f"{BASE_URL}/intake-forms", json=payload, timeout=30.0)
+        response = httpx.post(f"{BASE_URL}/intake-forms", json=payload, headers=B2B_HEADERS, timeout=30.0)
         
         if response.status_code == 200:
             data = response.json()
@@ -208,6 +209,7 @@ def manual_extraction(lead_id):
         response = httpx.post(
             f"{BASE_URL}/leads/{lead_id}/extract-pdf",
             json=payload,
+            headers=B2B_HEADERS,
             timeout=30.0
         )
         
@@ -250,7 +252,7 @@ def verify_database_records(lead_id):
     print(f"\nGET {BASE_URL}/leads/{lead_id}")
     
     try:
-        response = httpx.get(f"{BASE_URL}/leads/{lead_id}", timeout=10.0)
+        response = httpx.get(f"{BASE_URL}/leads/{lead_id}", headers=B2B_HEADERS, timeout=10.0)
         
         if response.status_code == 200:
             lead = response.json()
@@ -314,13 +316,13 @@ def main():
     print_section("SUMMARY")
     
     print("\n📊 Database Records Created:")
-    print(f"   • 2 intake_forms documents")
-    print(f"   • 2 leads documents")
-    print(f"   • 2 lead_context_docs documents (from PDF extractions)")
+    print(f"   • 2 intake_forms documents (in b2b scope)")
+    print(f"   • 2 leads documents (in b2b scope)")
+    print(f"   • 2 lead_context_docs documents (in b2b scope)")
     
     print("\n🔍 To verify in Couchbase:")
     print("   1. Open Couchbase UI")
-    print("   2. Navigate to your bucket > scope")
+    print("   2. Navigate to your bucket > b2b scope")
     print("   3. Check collections:")
     print("      - intake_forms (2 new documents)")
     print("      - leads (2 new documents)")
