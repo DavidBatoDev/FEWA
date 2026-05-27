@@ -33,6 +33,10 @@ Fill in:
 - `COUCHBASE_PASSWORD`
 - `COUCHBASE_BUCKET`
 - `COUCHBASE_SCOPE`
+- `COUCHBASE_SCOPE_B2B`
+- `COUCHBASE_SCOPE_B2C`
+- `COUCHBASE_PROVISION_SCOPES`
+- `COUCHBASE_SEED_SCOPES`
 - `AGORA_APP_ID`
 - `AGORA_APP_CERTIFICATE`
 - `AGORA_CONVO_API_BASE`
@@ -42,6 +46,7 @@ Fill in:
 
 Hackathon tip for teammate-safe isolation:
 - Use a personal scope value (example: `COUCHBASE_SCOPE=sales_agent_augus`) so your test traffic does not mix with your teammate's data.
+- For shared B2B/B2C split, keep `COUCHBASE_SCOPE=sales_agent` for legacy compatibility and route by request flow (`x-sales-flow: b2b` or `x-sales-flow: b2c`).
 
 Where to get Agora keys:
 - Open Agora Console -> `Projects` -> your project -> `Configure`.
@@ -134,6 +139,16 @@ These are the primary backend contracts aligned to Agora REST operations:
 - `POST /agora/cae/query` (maps to upstream `GET /agents/{agentId}`)
 - `POST /agora/cae/history`
 - `POST /agora/cae/status` (status alias for compatibility)
+
+### Scope routing for B2B/B2C
+
+All endpoints now support flow-based Couchbase scope routing via request context:
+
+- `x-sales-flow: b2b` -> writes/reads from scope `b2b`
+- `x-sales-flow: b2c` -> writes/reads from scope `b2c`
+- missing/unknown flow -> falls back to legacy scope `sales_agent`
+
+You can also pass `?flow=b2b` or `?flow=b2c` in query parameters.
 
 Behavior details:
 - `leave` accepts successful empty upstream body.

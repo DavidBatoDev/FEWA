@@ -19,7 +19,7 @@ CONNECTION_STRING = os.getenv("COUCHBASE_CONNECTION_STRING", "")
 USERNAME = os.getenv("COUCHBASE_USERNAME", "")
 PASSWORD = os.getenv("COUCHBASE_PASSWORD", "")
 BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "workflow_ph")
-SCOPE_NAME = os.getenv("COUCHBASE_SCOPE", "sales_agent")
+SEED_SCOPES_RAW = os.getenv("COUCHBASE_SEED_SCOPES", "sales_agent,b2b,b2c")
 
 NOW = datetime.now(timezone.utc).isoformat()
 
@@ -102,6 +102,17 @@ OFFERS = [
     },
 ]
 
+def _parse_scope_names(raw: str) -> list[str]:
+    seen = set()
+    scopes: list[str] = []
+    for part in raw.split(","):
+        value = part.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        scopes.append(value)
+    return scopes
+
 
 def main():
     if not all([CONNECTION_STRING, USERNAME, PASSWORD]):
@@ -115,16 +126,21 @@ def main():
     print("Connected.")
 
     bucket = cluster.bucket(BUCKET_NAME)
-    scope = bucket.scope(SCOPE_NAME)
-    offers_col = scope.collection("offers")
+    scope_names = _parse_scope_names(SEED_SCOPES_RAW)
+    if not scope_names:
+        print("ERROR: No scope names configured. Set COUCHBASE_SEED_SCOPES.")
+        sys.exit(1)
 
-    print("\nSeeding offers...")
-    for item in OFFERS:
-        try:
-            offers_col.insert(item["key"], item["doc"])
-            print(f"  Inserted: {item['doc']['name']}")
-        except DocumentExistsException:
-            print(f"  Already exists: {item['doc']['name']} (skipped)")
+    for scope_name in scope_names:
+        print(f"\nSeeding offers in scope '{scope_name}'...")
+        scope = bucket.scope(scope_name)
+        offers_col = scope.collection("offers")
+        for item in OFFERS:
+            try:
+                offers_col.insert(item["key"], item["doc"])
+                print(f"  Inserted: {item['doc']['name']}")
+            except DocumentExistsException:
+                print(f"  Already exists: {item['doc']['name']} (skipped)")
 
     print("\nSeeding complete.")
 

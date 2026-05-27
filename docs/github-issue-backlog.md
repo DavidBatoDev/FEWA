@@ -146,3 +146,10 @@ Body:
 - Persist the refined fields to the Couchbase `intake_forms` document and automatically map them to the linked `leads` document fields, making them ready for downstream AI scoring and discovery calls.
 Assignee: `@<backend-teammate>`
 Label: `backend`
+
+### 20) [Backend] Consolidate Couchbase into fewa-workflow-ph with B2B/B2C scopes
+Body:
+- Create/verify bucket `fewa-workflow-ph` and add scopes `b2b` and `b2c`, each with required collections/indexes used by the current sales workflow (`leads`, `conversations`, `follow_ups`, `offers`, `campaigns`, `intake_forms`, `lead_context_docs`, `discovery_calls`).
+- Add flow-aware backend config/routing so B2B traffic reads/writes to `b2b` and B2C traffic to `b2c`, while keeping existing `sales_agent` path temporarily active for backward compatibility and staged cutover.
+Assignee: `@<backend-teammate>`
+Label: `backend`
