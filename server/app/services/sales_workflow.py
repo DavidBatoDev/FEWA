@@ -75,7 +75,7 @@ async def refresh_sales_state_from_transcript(
         if value:
             setattr(lead, field, value)
 
-    asked_for_proposal = bool(extracted.get("asked_for_proposal", False))
+    asked_for_proposal = bool(extracted.get("asked_for_proposal", False)) or bool(lead.asked_for_proposal)
     lead.asked_for_proposal = asked_for_proposal
     score, temperature, breakdown = score_lead(lead, asked_for_proposal)
 
@@ -86,8 +86,18 @@ async def refresh_sales_state_from_transcript(
     if mark_in_progress and lead.status not in ("qualified", "disqualified"):
         lead.status = "in_progress"
 
+    prior_objections = list(conversation.objections)
+    prior_buying_signals = list(conversation.buying_signals)
+
     conversation.objections = _safe_string_list(extracted.get("objections"))
     conversation.buying_signals = _safe_string_list(extracted.get("buying_signals"))
+    for objection in prior_objections:
+        if objection not in conversation.objections:
+            conversation.objections.append(objection)
+    for signal in prior_buying_signals:
+        if signal not in conversation.buying_signals:
+            conversation.buying_signals.append(signal)
+
     lead.objections = list(conversation.objections)
     lead.buying_signals = list(conversation.buying_signals)
 

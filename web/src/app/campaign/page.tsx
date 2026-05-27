@@ -229,10 +229,77 @@ function CampaignSetupForm() {
               </div>
             </div>
 
-            {/* 3. Specialized Settings */}
+            {/* 3. AI Knowledge & Context Chatbot */}
+            <div className="rounded-3xl border border-white/[0.06] bg-zinc-900/40 backdrop-blur-xl overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-white/[0.06] flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-mono">3</span>
+                  AI Knowledge & Context
+                </h2>
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Sync
+                </div>
+              </div>
+
+              <div className="h-[400px] flex flex-col bg-zinc-950/40 relative">
+                {/* Chat Messages Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  <div className="flex items-start gap-3 max-w-[85%]">
+                    <div className={`p-2 rounded-lg ${agentType === 'sales' ? 'bg-cyan-500 text-black' : 'bg-purple-500 text-white'} shrink-0`}>
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3.5 rounded-2xl rounded-tl-none bg-white/[0.03] border border-white/[0.05] text-xs text-zinc-300 leading-relaxed">
+                        {agentType === 'sales' 
+                          ? "Ready to prime Faye for your B2B campaign. Upload your sales scripts, client case studies, or pain-point matrices to build her knowledge base."
+                          : "Ready to configure the B2C store context. Upload your product CSVs, brand guidelines, or delivery policies so Faye can answer customer queries accurately."}
+                      </div>
+                      <span className="text-[10px] text-zinc-600 font-mono ml-1">FAYE_SYSTEM • Just now</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center py-2">
+                    <div className="px-4 py-1.5 rounded-full border border-white/[0.03] bg-zinc-900/50 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                      Session started: May 27, 2026
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dropzone / Input Area */}
+                <div className="p-6 pt-0">
+                  <div className="relative group">
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/20 to-blue-600/20 blur opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    <div className="relative p-6 rounded-2xl border-2 border-dashed border-white/[0.08] bg-zinc-900/40 hover:border-cyan-500/30 transition-all flex flex-col items-center justify-center text-center gap-3 cursor-pointer">
+                      <div className={`p-3 rounded-full ${agentType === 'sales' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                        <Database className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-white">Upload Training Data</p>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">PDF, CSV, TXT or Markdown</p>
+                      </div>
+                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" multiple />
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 flex items-center gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Add context manually (e.g. 'Faye, mention our 20% discount')..."
+                      className="flex-1 rounded-xl border border-white/[0.08] bg-zinc-950/60 px-4 py-3 text-xs text-zinc-300 outline-none focus:border-cyan-500/50 transition-colors"
+                    />
+                    <button className={`p-3 rounded-xl ${agentType === 'sales' ? 'bg-cyan-500 text-black' : 'bg-purple-500 text-white'} shadow-lg hover:scale-105 transition-transform active:scale-95`}>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Specialized Settings */}
             <div className="rounded-3xl border border-white/[0.06] bg-zinc-900/40 p-6 backdrop-blur-xl space-y-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-mono">3</span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-mono">4</span>
                 {agentType === "sales" ? "B2B Sales Directives" : "B2C E-commerce Options"}
               </h2>
 

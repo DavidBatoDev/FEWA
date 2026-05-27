@@ -9,6 +9,7 @@ from app.models.lead import LeadUpdate
 from app.services.lead_scorer import score_lead
 from app.services.offer_recommender import recommend_offer
 from app.services.follow_up import generate_follow_up
+from app.services.pdf_extractor import process_pdf_extraction
 from app.db.couchbase import get_collection, get_scope
 from app.models.lead import Lead
 
@@ -245,6 +246,32 @@ async def list_lead_context_docs(lead_id: str):
         doc["id"] = row.get("id", "")
         docs.append(doc)
     return {"lead_id": lead_id, "context_docs": docs}
+
+
+class ExtractPdfRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/{lead_id}/extract-pdf")
+async def extract_pdf_for_lead(lead_id: str, payload: ExtractPdfRequest):
+    """Manually trigger PDF extraction for a lead."""
+    leads_col = get_collection("leads")
+    
+    # Verify lead exists
+    try:
+        leads_col.get(lead_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    file_path = payload.file_path.strip()
+    if not file_path:
+        raise HTTPException(status_code=400, detail="file_path is required")
+    
+    try:
+        result = await process_pdf_extraction(file_path, lead_id)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(exc)}")
 
 
 @router.post("/{lead_id}/book-call")

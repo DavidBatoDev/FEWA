@@ -11,6 +11,7 @@ from app.models.lead import Lead
 from app.services.sales_workflow import now_iso
 from app.services.lead_scorer import score_lead
 from app.services.offer_recommender import recommend_offer
+from app.services.pdf_extractor import process_pdf_extraction
 
 router = APIRouter(prefix="/intake-forms", tags=["intake_forms"])
 
@@ -132,6 +133,23 @@ async def create_intake_form(payload: IntakeFormCreateRequest):
     except CouchbaseException as exc:
         raise HTTPException(status_code=503, detail=f"Couchbase error: {exc}") from exc
 
+    # Process PDF extraction if uploaded_pdf_id is provided
+    extraction_result = None
+    if payload.uploaded_pdf_id:
+        # Map uploaded_pdf_id to file path (assuming uploads directory)
+        pdf_file_path = f"uploads/{payload.uploaded_pdf_id}.pdf"
+        
+        try:
+            extraction_result = await process_pdf_extraction(pdf_file_path, lead_id)
+            
+            # Refresh lead data after extraction
+            lead_result = leads_col.get(lead_id)
+            lead = Lead(**lead_result.content_as[dict])
+        except Exception:
+            # Don't block intake form submission if extraction fails
+            # The extraction service already handles error logging
+            pass
+
     response = dict(intake_doc)
     response["id"] = intake_id
     response["duplicate_email_count"] = duplicate_email_count
@@ -142,4 +160,5 @@ async def create_intake_form(payload: IntakeFormCreateRequest):
             "id": lead_id,
             **lead.model_dump(),
         },
+        "extraction": extraction_result,
     }

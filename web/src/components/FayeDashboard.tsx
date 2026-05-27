@@ -565,11 +565,6 @@ export function FayeDashboard({
                 </span>
               )}
               
-              <h4 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase mb-3.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                Interactive Calendar Slots
-              </h4>
-
               <div className="space-y-4">
                 <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-mono font-bold text-zinc-500">
                   <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span>

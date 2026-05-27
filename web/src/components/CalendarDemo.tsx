@@ -1,16 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Clock, CheckCircle, Mail, Sparkles, Send, RotateCcw } from "lucide-react";
+import { 
+  Calendar as CalendarIcon, 
+  Clock, 
+  CheckCircle, 
+  Mail, 
+  Sparkles, 
+  Send, 
+  RotateCcw
+} from "lucide-react";
+import { DayPicker } from "react-day-picker";
+import { format, setMonth, setYear } from "date-fns";
+import "react-day-picker/dist/style.css";
 
-interface CalendarCell {
-  day: number;
-  month: "current" | "prev" | "next";
-  isSelectable: boolean;
+interface CalendarDemoProps {
+  mode?: "b2b" | "b2c";
 }
 
-export function CalendarDemo() {
-  const [selectedDate, setSelectedDate] = useState<number | null>(28); // Default to May 28
+export function CalendarDemo({ mode = "b2b" }: CalendarDemoProps) {
+  const isB2B = mode === "b2b";
+  const themeColor = isB2B ? "text-cyan-600" : "text-purple-600";
+  const themeBg = isB2B ? "bg-cyan-100" : "bg-purple-100";
+  const themeBorder = isB2B ? "border-cyan-200" : "border-purple-200";
+  const themeBtn = isB2B ? "bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg" : "bg-purple-600 hover:bg-purple-700 text-white shadow-lg";
+
+  const [month, setMonthDate] = useState<Date>(new Date(2026, 4));
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(2026, 4, 28));
   const [selectedTime, setSelectedTime] = useState<string | null>("02:00 PM");
   const [company, setCompany] = useState("");
   const [name, setName] = useState("");
@@ -18,69 +34,6 @@ export function CalendarDemo() {
   const [isBooked, setIsBooked] = useState(false);
 
   const timeSlots = ["09:00 AM", "10:30 AM", "02:00 PM", "03:30 PM", "05:00 PM"];
-  
-  // May 2026: Starts on Friday (index 5), 31 days
-  // Previous month is April (30 days): April 26, 27, 28, 29, 30
-  // Next month is June: June 1, 2, 3, 4, 5, 6
-  
-  const cells: CalendarCell[] = [
-    // Row 1 (April trailing days)
-    { day: 26, month: "prev", isSelectable: false },
-    { day: 27, month: "prev", isSelectable: false },
-    { day: 28, month: "prev", isSelectable: false },
-    { day: 29, month: "prev", isSelectable: false },
-    { day: 30, month: "prev", isSelectable: false },
-    // May starts here
-    { day: 1, month: "current", isSelectable: false }, // Friday (past date in demo context)
-    { day: 2, month: "current", isSelectable: false }, // Saturday (weekend)
-    
-    // Row 2
-    { day: 3, month: "current", isSelectable: false }, // Sunday
-    { day: 4, month: "current", isSelectable: false },
-    { day: 5, month: "current", isSelectable: false },
-    { day: 6, month: "current", isSelectable: false },
-    { day: 7, month: "current", isSelectable: false },
-    { day: 8, month: "current", isSelectable: false },
-    { day: 9, month: "current", isSelectable: false },
-    
-    // Row 3
-    { day: 10, month: "current", isSelectable: false },
-    { day: 11, month: "current", isSelectable: false },
-    { day: 12, month: "current", isSelectable: false },
-    { day: 13, month: "current", isSelectable: false },
-    { day: 14, month: "current", isSelectable: false },
-    { day: 15, month: "current", isSelectable: false },
-    { day: 16, month: "current", isSelectable: false },
-    
-    // Row 4
-    { day: 17, month: "current", isSelectable: false },
-    { day: 18, month: "current", isSelectable: false },
-    { day: 19, month: "current", isSelectable: false },
-    { day: 20, month: "current", isSelectable: false },
-    { day: 21, month: "current", isSelectable: false },
-    { day: 22, month: "current", isSelectable: false },
-    { day: 23, month: "current", isSelectable: false },
-    
-    // Row 5
-    { day: 24, month: "current", isSelectable: false },
-    { day: 25, month: "current", isSelectable: false },
-    { day: 26, month: "current", isSelectable: false },
-    // May 27 is today in mock scenario
-    { day: 27, month: "current", isSelectable: true },
-    { day: 28, month: "current", isSelectable: true }, // Selectable
-    { day: 29, month: "current", isSelectable: true }, // Selectable
-    { day: 30, month: "current", isSelectable: false }, // Saturday (weekend)
-    
-    // Row 6
-    { day: 31, month: "current", isSelectable: false }, // Sunday (weekend)
-    // June leading days
-    { day: 1, month: "next", isSelectable: false },
-    { day: 2, month: "next", isSelectable: false },
-    { day: 3, month: "next", isSelectable: false },
-    { day: 4, month: "next", isSelectable: false },
-    { day: 5, month: "next", isSelectable: false },
-    { day: 6, month: "next", isSelectable: false }
-  ];
 
   const handleBooking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,164 +41,166 @@ export function CalendarDemo() {
     setIsBooked(true);
   };
 
-  const getDayName = (dayNumber: number) => {
-    const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    // May 1st, 2026 is a Friday (index 5)
-    const index = (dayNumber - 1 + 5) % 7;
-    return weekdays[index];
+  const formatDate = (date: Date) => {
+    return format(date, "EEEE, MMMM d, yyyy");
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-8">
-      {/* Visual Spiral Bound Ring Elements at the top of the Wall Calendar */}
-      <div className="relative z-10 -mb-6 flex justify-around px-8 pointer-events-none">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="flex flex-col items-center">
-            {/* Hanging nail/shadow */}
-            <div className="w-1.5 h-1.5 rounded-full bg-zinc-850" />
-            {/* The metal spiral loop */}
-            <div className="w-3 h-10 rounded-full bg-gradient-to-b from-zinc-600 via-zinc-400 to-zinc-700 border border-white/20 shadow-lg -mt-1" />
-          </div>
-        ))}
-      </div>
-
-      {/* Main Wall Calendar Sheet */}
-      <div className="relative rounded-3xl border border-white/[0.08] bg-zinc-900/40 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
-        {/* Calendar Header / Binder Band */}
-        <div className="bg-zinc-950/80 px-6 py-6 border-b border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-black tracking-widest text-white uppercase flex items-center gap-2">
-                MAY 2026
-                <span className="text-xs font-mono font-medium tracking-normal text-zinc-500 lowercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.04]">
-                  complete-grid-v3
-                </span>
-              </h3>
-              <p className="text-xs text-zinc-400">Monthly Wall Calendar Grid — Select May 27, 28, or 29 to schedule a demo slot</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 bg-white/[0.02] border border-white/[0.05] px-3.5 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            System Date Context: May 27, 2026
-          </div>
-        </div>
-
-        {/* Calendar Weekday Names */}
-        <div className="grid grid-cols-7 border-b border-white/[0.05] bg-white/[0.01]">
-          {["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"].map((dayName) => (
-            <div
-              key={dayName}
-              className="py-3 text-[10px] sm:text-xs font-black tracking-wider text-zinc-500 text-center border-r border-white/[0.03] last:border-0"
-            >
-              {dayName}
+    <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      
+      {/* Left Column: Calendar Sheet */}
+      <div className="space-y-0">
+        {/* Visual Spiral Bound Ring Elements */}
+        <div className="relative z-10 -mb-6 flex justify-around px-8 pointer-events-none">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex flex-col items-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+              <div className="w-3 h-10 rounded-full bg-gradient-to-b from-zinc-100 via-white to-zinc-200 border border-zinc-300 shadow-md -mt-1" />
             </div>
           ))}
         </div>
 
-        {/* Large Day Cells Grid */}
-        <div className="grid grid-cols-7 bg-zinc-950/20">
-          {cells.map((cell, idx) => {
-            const isCurrentMonth = cell.month === "current";
-            const isWeekend = isCurrentMonth && ((cell.day - 1 + 5) % 7 === 0 || (cell.day - 1 + 5) % 7 === 6);
-            
-            const isSelected = isCurrentMonth && selectedDate === cell.day;
-            const hasBooking = isBooked && isSelected;
-            const isToday = isCurrentMonth && cell.day === 27;
+        {/* Main Wall Calendar Sheet - SOLID LIGHT COLOR */}
+        <div className="relative rounded-3xl border-4 border-zinc-200 bg-white shadow-2xl overflow-hidden text-zinc-900">
+          {/* Calendar Header */}
+          <div className="bg-zinc-50 px-8 py-8 border-b-2 border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-2xl ${themeBg} ${themeColor} border ${themeBorder} shadow-sm`}>
+                <CalendarIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-3xl font-black tracking-tighter text-zinc-900 uppercase">
+                  {format(month, "MMMM yyyy")}
+                </h3>
+                <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest mt-1">
+                  {isB2B ? "B2B SALES APPOINTMENT" : "B2C DELIVERY SCHEDULE"}
+                </p>
+              </div>
+            </div>
 
-            // Background classes (no container opacity)
-            const cellBg = !isCurrentMonth 
-              ? "bg-zinc-950/60 border-white/[0.02]" 
-              : isSelected
-              ? "bg-cyan-950/20 border-cyan-500/50 shadow-[inset_0_0_15px_rgba(6,182,212,0.15)]"
-              : isWeekend
-              ? "bg-zinc-950/30 border-white/[0.02]"
-              : !cell.isSelectable
-              ? "bg-zinc-900/10 border-white/[0.03]"
-              : "bg-zinc-900/40 hover:bg-white/[0.03] border-white/[0.06]";
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border-2 border-zinc-100 shadow-sm">
+                <select 
+                  value={month.getMonth()}
+                  onChange={(e) => setMonthDate(setMonth(month, parseInt(e.target.value)))}
+                  className="bg-transparent text-zinc-900 font-bold text-sm px-3 py-1.5 outline-none cursor-pointer hover:bg-zinc-50 rounded-xl transition-colors appearance-none border-r-2 border-zinc-100"
+                >
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <option key={i} value={i}>{format(new Date(2026, i), "MMMM")}</option>
+                  ))}
+                </select>
+                <select 
+                  value={month.getFullYear()}
+                  onChange={(e) => setMonthDate(setYear(month, parseInt(e.target.value)))}
+                  className="bg-transparent text-zinc-900 font-bold text-sm px-3 py-1.5 outline-none cursor-pointer hover:bg-zinc-50 rounded-xl transition-colors appearance-none"
+                >
+                  {Array.from({ length: 11 }).map((_, i) => (
+                    <option key={i} value={2024 + i}>{2024 + i}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
-            // Custom text color for date numbers to ensure readability
-            const numberColor = !isCurrentMonth
-              ? "text-zinc-700 font-medium"
-              : isSelected
-              ? "text-cyan-400 font-extrabold"
-              : isWeekend
-              ? "text-zinc-600 font-semibold"
-              : !cell.isSelectable
-              ? "text-zinc-550 font-semibold"
-              : "text-zinc-200 font-bold";
-
-            return (
-              <button
-                key={idx}
-                type="button"
-                disabled={!cell.isSelectable || isBooked}
-                onClick={() => setSelectedDate(cell.day)}
-                className={`min-h-[90px] sm:min-h-[110px] p-2.5 border-b border-r border-white/[0.04] last:border-r-0 text-left transition-all relative flex flex-col justify-between group ${cellBg}`}
-              >
-                {/* Day number */}
-                <div className="flex justify-between items-start w-full">
-                  <span className={`text-sm sm:text-base ${numberColor}`}>
-                    {cell.day}
-                  </span>
-                  
-                  {/* Status pills inside wall calendar */}
-                  {isToday && (
-                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 uppercase">
-                      Today
-                    </span>
-                  )}
-                  {isSelected && !isBooked && (
-                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase animate-pulse">
-                      Selected
-                    </span>
-                  )}
-                </div>
-
-                {/* Simulated handwritten wall-calendar note */}
-                {hasBooking ? (
-                  <div className="w-full mt-2 p-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-left text-[9px] sm:text-[10px] text-emerald-400 font-medium animate-fade-in flex flex-col gap-0.5">
-                    <span className="font-bold text-[8px] uppercase tracking-wider text-emerald-500">Confirmed</span>
-                    <span className="truncate">📞 {company}</span>
-                    <span className="text-[8px] opacity-75 font-mono">{selectedTime}</span>
-                  </div>
-                ) : (
-                  isSelected && cell.isSelectable && (
-                    <div className="hidden sm:block text-[9px] text-cyan-400/70 italic mt-auto">
-                      Awaiting details...
-                    </div>
-                  )
-                )}
-              </button>
-            );
-          })}
+          {/* DayPicker Container */}
+          <div className="p-8 flex justify-center bg-white relative">
+            <style>{`
+              .rdp-root {
+                --rdp-accent-color: ${isB2B ? '#0891b2' : '#9333ea'};
+                --rdp-accent-foreground: #ffffff;
+                --rdp-day-height: 56px;
+                --rdp-day-width: 56px;
+                margin: 0;
+              }
+              .rdp-month_grid {
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 4px;
+              }
+              .rdp-weekday {
+                color: #71717a !important;
+                font-weight: 900 !important;
+                font-size: 0.7rem !important;
+                text-transform: uppercase !important;
+                padding-bottom: 12px !important;
+                text-align: center !important;
+              }
+              .rdp-day {
+                font-weight: 800 !important;
+                font-size: 1rem !important;
+                border-radius: 12px !important;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                border: 2px solid transparent !important;
+                cursor: pointer !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              .rdp-day:hover:not(.rdp-selected):not(.rdp-outside) {
+                background-color: ${isB2B ? '#0891b2' : '#9333ea'} !important;
+                color: white !important;
+                transform: scale(1.1) !important;
+                z-index: 10 !important;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+                border-color: white !important;
+              }
+              .rdp-selected {
+                background-color: ${isB2B ? '#0891b2' : '#9333ea'} !important;
+                color: white !important;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+                transform: scale(1.05) !important;
+              }
+              .rdp-today {
+                border: 2px solid ${isB2B ? '#0891b2' : '#9333ea'} !important;
+                color: ${isB2B ? '#0891b2' : '#9333ea'} !important;
+                font-weight: 900 !important;
+              }
+              .rdp-outside {
+                opacity: 0.2 !important;
+              }
+              @media (max-width: 640px) {
+                .rdp-day {
+                  width: 44px !important;
+                  height: 44px !important;
+                  font-size: 0.875rem !important;
+                }
+              }
+            `}</style>
+            <DayPicker
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              month={month}
+              onMonthChange={setMonthDate}
+              disabled={{ dayOfWeek: [0, 6] }}
+              className="w-full flex justify-center"
+              showOutsideDays
+            />
+          </div>
         </div>
       </div>
 
-      {/* Interactive scheduling actions and form details */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        
-        {/* Left Form: Booking inputs & slot settings */}
-        <div className="lg:col-span-7 rounded-3xl border border-white/[0.07] bg-zinc-900/30 p-6 flex flex-col justify-between">
+      {/* Right Column: Interactive scheduling actions */}
+      <div className="space-y-8 flex flex-col">
+        <div className="rounded-3xl border-2 border-zinc-200 bg-white p-8 shadow-xl flex flex-col justify-between text-zinc-900">
           {!isBooked ? (
-            <form onSubmit={handleBooking} className="space-y-6">
-              <div className="space-y-1">
-                <h4 className="text-base font-bold text-white flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-cyan-400" />
-                  Configure Booking Schedule
+            <form onSubmit={handleBooking} className="space-y-8">
+              <div className="space-y-2">
+                <h4 className="text-xl font-black text-zinc-900 flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${themeBg} ${themeColor}`}>
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  {isB2B ? 'Schedule your Demo' : 'Delivery Details'}
                 </h4>
-                <p className="text-xs text-zinc-400">
-                  Fill in the B2B client qualifiers below for the chosen date: <strong className="text-cyan-400">May {selectedDate}, 2026 ({selectedDate ? getDayName(selectedDate) : ""})</strong>.
+                <p className="text-sm text-zinc-500 font-medium">
+                  {selectedDate 
+                    ? `You've selected ${formatDate(selectedDate)}`
+                    : "Please pick a date from the calendar on the left."}
                 </p>
               </div>
 
-              {/* Time Slots row */}
-              <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 block mb-2">Select Call Time</span>
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {timeSlots.map((time) => {
                     const isSelected = selectedTime === time;
                     return (
@@ -253,13 +208,13 @@ export function CalendarDemo() {
                         key={time}
                         type="button"
                         onClick={() => setSelectedTime(time)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs transition-all ${
+                        className={`flex items-center gap-2 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm ${
                           isSelected
-                            ? "bg-cyan-500/10 border-cyan-500 text-cyan-400 font-bold"
-                            : "bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:bg-white/[0.05] hover:text-white"
+                            ? `${themeBg} ${themeColor} ${themeBorder} scale-105 shadow-md`
+                            : "bg-zinc-50 border-zinc-100 text-zinc-400 hover:border-zinc-200 hover:text-zinc-600"
                         }`}
                       >
-                        <Clock className="w-3.5 h-3.5" />
+                        <Clock className="w-4 h-4" />
                         {time}
                       </button>
                     );
@@ -267,81 +222,69 @@ export function CalendarDemo() {
                 </div>
               </div>
 
-              {/* Detail fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">Company Name</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs uppercase font-black tracking-widest text-zinc-400 ml-1">{isB2B ? 'Company Name' : 'Recipient Name'}</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. ABC Logistics"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-white/[0.08] bg-zinc-950 px-3.5 py-3 text-white outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+                    placeholder={isB2B ? "e.g. Acme Corp" : "e.g. Juan dela Cruz"}
+                    value={isB2B ? company : name}
+                    onChange={(e) => isB2B ? setCompany(e.target.value) : setName(e.target.value)}
+                    className="w-full text-sm font-bold rounded-2xl border-2 border-zinc-100 bg-zinc-50 px-5 py-4 text-zinc-900 outline-none focus:border-cyan-500/50 transition-all placeholder:text-zinc-300"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">Your Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Juan dela Cruz"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full text-xs rounded-xl border border-white/[0.08] bg-zinc-950 px-3.5 py-3 text-white outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
-                  />
-                </div>
+                {isB2B && (
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase font-black tracking-widest text-zinc-400 ml-1">Your Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Juan dela Cruz"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full text-sm font-bold rounded-2xl border-2 border-zinc-100 bg-zinc-50 px-5 py-4 text-zinc-900 outline-none focus:border-cyan-500/50 transition-all placeholder:text-zinc-300"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">Email Address</label>
+              <div className="space-y-2">
+                <label className="text-xs uppercase font-black tracking-widest text-zinc-400 ml-1">{isB2B ? 'Work Email' : 'Shipping Address'}</label>
                 <input
-                  type="email"
+                  type={isB2B ? "email" : "text"}
                   required
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-white/[0.08] bg-zinc-950 px-3.5 py-3 text-white outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20"
+                  placeholder={isB2B ? "name@company.com" : "e.g. 123 Street, Manila"}
+                  value={isB2B ? email : company}
+                  onChange={(e) => isB2B ? setEmail(e.target.value) : setCompany(e.target.value)}
+                  className="w-full text-sm font-bold rounded-2xl border-2 border-zinc-100 bg-zinc-50 px-5 py-4 text-zinc-900 outline-none focus:border-cyan-500/50 transition-all placeholder:text-zinc-300"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-4 flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(6,182,212,0.2)]"
+                disabled={!selectedDate}
+                className={`w-full rounded-2xl ${themeBtn} font-black py-5 flex items-center justify-center gap-3 transition-all disabled:opacity-50 active:scale-95`}
               >
-                <Send className="w-4 h-4" />
-                <span>Confirm Call and Write to Calendar</span>
+                <Send className="w-5 h-5" />
+                <span className="uppercase tracking-widest">{isB2B ? 'Confirm Discovery Call' : 'Finalize Schedule'}</span>
               </button>
             </form>
           ) : (
-            // Success booking feedback
-            <div className="space-y-6 flex flex-col justify-center h-full text-center md:text-left py-4">
-              <div className="flex justify-center md:justify-start">
-                <div className="p-3.5 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
-                  <CheckCircle className="w-12 h-12" />
+            <div className="space-y-8 flex flex-col justify-center h-full text-center py-8">
+              <div className="flex justify-center">
+                <div className={`p-6 ${isB2B ? 'bg-emerald-100 text-emerald-600 border-emerald-200' : 'bg-purple-100 text-purple-600 border-purple-200'} rounded-full border-4 shadow-inner`}>
+                  <CheckCircle className="w-16 h-16" />
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <h4 className="text-2xl font-black text-white">Appointment Scheduled!</h4>
-                <p className="text-sm text-zinc-300">
-                  We've successfully updated your calendar block on May {selectedDate} and generated the automated B2B campaign response.
+              <div className="space-y-3">
+                <h4 className="text-3xl font-black text-zinc-900 italic tracking-tighter">Success!</h4>
+                <p className="text-zinc-500 font-bold max-w-md mx-auto leading-relaxed">
+                  {isB2B 
+                    ? `Your discovery call for ${selectedDate && formatDate(selectedDate)} at ${selectedTime} is confirmed. Expect an invite in your inbox shortly.`
+                    : `We've scheduled your delivery for ${selectedDate && formatDate(selectedDate)}. Our team will notify you via SMS when we're on the way.`}
                 </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-2 text-xs">
-                <div className="flex justify-between text-zinc-400">
-                  <span>Qualifying Outcome:</span>
-                  <span className="font-bold text-emerald-400">Lead Qualified ✓</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Scheduled Time:</span>
-                  <span className="font-semibold text-white">May {selectedDate}, 2026 at {selectedTime}</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Client Company:</span>
-                  <span className="text-white truncate max-w-[200px]">{company}</span>
-                </div>
               </div>
 
               <button
@@ -351,80 +294,71 @@ export function CalendarDemo() {
                   setName("");
                   setEmail("");
                 }}
-                className="rounded-xl border border-white/[0.08] hover:bg-white/[0.05] text-zinc-300 px-5 py-2.5 text-xs font-semibold transition-all flex items-center justify-center gap-2 self-center md:self-start"
+                className="rounded-2xl border-2 border-zinc-200 hover:bg-zinc-50 text-zinc-500 px-8 py-3 text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 self-center"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Book Another Slot
+                <RotateCcw className="w-4 h-4" />
+                {isB2B ? 'Schedule Another' : 'Modify Request'}
               </button>
             </div>
           )}
         </div>
 
-        {/* Right Panel: Simulated Output Logs */}
-        <div className="lg:col-span-5 rounded-3xl border border-white/[0.07] bg-zinc-900/30 p-6 flex flex-col justify-between font-mono text-xs overflow-hidden">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.05]">
-              <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1.5 uppercase">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                AI Log Stream
+        <div className="rounded-3xl border-2 border-zinc-200 bg-white p-8 shadow-xl flex flex-col justify-between font-mono text-xs overflow-hidden text-zinc-900">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b-2 border-zinc-50">
+              <span className={`text-xs font-black ${themeColor} flex items-center gap-2 uppercase tracking-tighter`}>
+                <Sparkles className="w-4 h-4" />
+                Live Agent Intel
               </span>
-              <span className="text-[9px] text-zinc-600 bg-white/[0.02] px-2 py-0.5 rounded">B2B SALES AGENT</span>
+              <span className="text-[10px] text-zinc-400 font-black border-2 border-zinc-50 px-3 py-1 rounded-lg">ID: AGENT_001</span>
             </div>
 
-            {/* Simulated Tool Activity Log */}
-            <div className="space-y-2">
-              <div className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider">Fired Tools:</div>
-              <div className="space-y-1.5 text-[11px] leading-relaxed">
-                <div className="flex justify-between text-zinc-400">
-                  <span>extract_lead_info()</span>
-                  <span className="text-zinc-500 font-semibold">{company ? `Company: ${company}` : "Awaiting company..."}</span>
+            <div className="space-y-4">
+              <div className="text-[10px] uppercase font-black text-zinc-300 tracking-widest">Active Processes:</div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-bold italic">validate_params()</span>
+                  <span className="text-zinc-900 font-black px-2 py-0.5 bg-zinc-100 rounded">TRUE</span>
                 </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>score_lead()</span>
-                  <span className="text-emerald-400 font-bold">Score: 90 (HOT 🔴)</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-bold italic">check_availability()</span>
+                  <span className="text-zinc-900 font-black px-2 py-0.5 bg-zinc-100 rounded">OK</span>
                 </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>book_discovery_call()</span>
-                  <span className="text-cyan-400 font-bold">{isBooked ? "Confirmed ✓" : "Pending slot..."}</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>generate_follow_up()</span>
-                  <span className={isBooked ? "text-purple-400 font-bold" : "text-zinc-600"}>
-                    {isBooked ? "Email Generated ✓" : "Pending..."}
-                  </span>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-bold italic">generate_invite()</span>
+                  <span className={`${isB2B ? 'text-cyan-600' : 'text-purple-600'} font-black`}>{isBooked ? "DONE" : "WAITING..."}</span>
                 </div>
               </div>
             </div>
 
-            {/* Simulated Email Draft Preview */}
-            <div className="pt-4 border-t border-white/[0.05] space-y-2.5">
-              <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
-                <Mail className="w-3.5 h-3.5 text-purple-400" />
-                Email Follow-up Draft
+            <div className="pt-6 border-t-2 border-zinc-50 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-900 uppercase tracking-tighter">
+                <Mail className="w-4 h-4 text-zinc-400" />
+                Draft Confirmation
               </div>
-              <div className="rounded-xl border border-white/[0.04] bg-zinc-950 p-4 space-y-2 text-zinc-400 leading-relaxed text-[11px]">
+              <div className="rounded-2xl border-2 border-zinc-50 bg-zinc-50 p-6 space-y-4 text-zinc-600 leading-relaxed text-[11px] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-white rotate-45 translate-x-8 -translate-y-8 border-b-2 border-zinc-100 shadow-sm" />
                 {isBooked ? (
                   <>
-                    <div><span className="text-zinc-600">Subject:</span> <span className="text-white font-medium">Follow Up: Discovery Consultation Call - {company}</span></div>
-                    <div className="h-px bg-white/[0.04] my-2" />
-                    <div>Hi {name || "there"},</div>
-                    <div>
-                      Thank you for scheduling your slot for <strong>{getDayName(selectedDate!)}, May {selectedDate} at {selectedTime}</strong>. 
-                      Based on our conversation, we have identified key automation opportunities for <strong>{company}</strong> and recommended our <strong>Sales Automation Package</strong>.
+                    <div className="text-zinc-900 font-black">{isB2B ? `RE: Demo Request - ${company}` : `RE: Delivery Schedule`}</div>
+                    <div className="h-0.5 bg-white my-2" />
+                    <div className="font-bold">Dear {name},</div>
+                    <div className="font-medium italic">
+                      {isB2B 
+                        ? `This confirms our session on ${formatDate(selectedDate!)} at ${selectedTime}.`
+                        : `Your delivery window is confirmed for ${formatDate(selectedDate!)}.`}
                     </div>
-                    <div>Looking forward to our call!</div>
-                    <div className="text-zinc-650 mt-2">FFlow.ph Sales Agent</div>
+                    <div className="text-zinc-300 mt-4 text-[9px] font-black uppercase tracking-widest italic">Sent via Agora Agent</div>
                   </>
                 ) : (
-                  <div className="text-center py-8 text-zinc-600 italic">
-                    Fill out the scheduling form to simulate a personalized email follow-up generated by the agent.
+                  <div className="text-center py-10 text-zinc-300 font-bold italic text-sm">
+                    Waiting for input...
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

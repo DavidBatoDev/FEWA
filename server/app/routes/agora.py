@@ -13,10 +13,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
-from app.db.couchbase import get_collection
+from app.db.couchbase import get_active_flow, get_collection
 from app.models.conversation import Conversation
 from app.models.lead import Lead
-from app.services.ai_agent import SYSTEM_PROMPT
+from app.services.prompt_registry import get_system_prompt
 from app.services.sales_workflow import append_turn_and_refresh_sales_state, create_lead_and_conversation
 
 router = APIRouter(prefix="/agora", tags=["agora"])
@@ -268,6 +268,8 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             detail="audio_scenario must be one of: default, chorus, aiserver",
         )
 
+    system_prompt = get_system_prompt(get_active_flow())
+
     return {
         "channel": _validate_channel_name(req.channel_name),
         "token": agent_token,
@@ -293,7 +295,7 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
         },
         "llm": {
             "system_messages": [
-                {"role": "system", "content": SYSTEM_PROMPT}
+                {"role": "system", "content": system_prompt}
             ],
         },
     }

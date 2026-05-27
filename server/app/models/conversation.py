@@ -17,6 +17,7 @@ class Conversation(BaseModel):
     summary: Optional[str] = None
     objections: list[str] = []
     buying_signals: list[str] = []
+    tool_activity_log: list[dict] = []
     created_at: str = ""
     updated_at: str = ""
 
