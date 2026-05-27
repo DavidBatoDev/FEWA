@@ -2,9 +2,16 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from couchbase.exceptions import CouchbaseException, DocumentNotFoundException
+from openai import AsyncOpenAI
+from app.config import settings
 from app.models.lead import Lead
 from app.models.conversation import Conversation, TranscriptEntry
-from app.services.ai_agent import get_agent_response, generate_conversation_summary
+from app.services.ai_agent import SYSTEM_PROMPT, get_agent_response, generate_conversation_summary
+from app.services.agent_tools import (
+    SALES_AGENT_TOOLS,
+    TOOL_RUNTIME_INSTRUCTIONS,
+    execute_agent_tool_calls,
+)
 from app.services.sales_workflow import (
     create_lead_and_conversation,
     now_iso,
@@ -59,25 +66,114 @@ async def handle_message(req: MessageRequest):
         ts = now_iso()
         conversations_col = get_collection("conversations")
         leads_col = get_collection("leads")
+        calls_col = get_collection("discovery_calls")
 
-        result = conversations_col.get(req.conversation_id)
-        conversation = Conversation(**result.content_as[dict])
-
-        user_entry = TranscriptEntry(role="user", message=req.message, timestamp=ts)
-        conversation.transcript.append(user_entry)
-
-        ai_response = await get_agent_response(conversation.transcript, req.language_mode)
-
-        assistant_entry = TranscriptEntry(role="assistant", message=ai_response, timestamp=now_iso())
-        conversation.transcript.append(assistant_entry)
-
+        conversation_result = conversations_col.get(req.conversation_id)
+        conversation = Conversation(**conversation_result.content_as[dict])
         lead_result = leads_col.get(req.lead_id)
         lead = Lead(**lead_result.content_as[dict])
+
         if conversation.lead_id != req.lead_id:
             raise HTTPException(
                 status_code=400,
                 detail="Conversation does not belong to the specified lead",
             )
+
+        user_entry = TranscriptEntry(role="user", message=req.message, timestamp=ts)
+        conversation.transcript.append(user_entry)
+
+        ai_response = ""
+        tools_fired: list[dict] = []
+
+        has_openai_key = bool(settings.openai_api_key and settings.openai_api_key.strip())
+        if has_openai_key:
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            system = SYSTEM_PROMPT
+            if req.language_mode == "Taglish":
+                system += "\n\nSpeak in natural Taglish, a mix of Filipino and English common in the Philippines."
+            system += "\n\n" + TOOL_RUNTIME_INSTRUCTIONS
+
+            messages: list[dict] = [{"role": "system", "content": system}]
+            for entry in conversation.transcript:
+                messages.append({"role": entry.role, "content": entry.message})
+
+            first_response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=SALES_AGENT_TOOLS,
+                tool_choice="auto",
+                temperature=0.4,
+                max_tokens=300,
+            )
+            first_msg = first_response.choices[0].message
+            first_tool_calls = first_msg.tool_calls or []
+
+            if first_tool_calls:
+                normalized_calls: list[dict] = []
+                tool_calls_for_message: list[dict] = []
+                for tc in first_tool_calls:
+                    tc_id = (getattr(tc, "id", "") or "").strip() or f"tool_call_{uuid.uuid4().hex}"
+                    fn = getattr(tc, "function", None)
+                    fn_name = getattr(fn, "name", "") if fn else ""
+                    fn_args = getattr(fn, "arguments", "{}") if fn else "{}"
+                    normalized_calls.append(
+                        {
+                            "id": tc_id,
+                            "name": fn_name,
+                            "arguments": fn_args,
+                        }
+                    )
+                    tool_calls_for_message.append(
+                        {
+                            "id": tc_id,
+                            "type": "function",
+                            "function": {
+                                "name": fn_name,
+                                "arguments": fn_args,
+                            },
+                        }
+                    )
+
+                tools_fired, tool_outputs_for_model = await execute_agent_tool_calls(
+                    tool_calls=normalized_calls,
+                    lead_id=req.lead_id,
+                    conversation_id=req.conversation_id,
+                    lead=lead,
+                    conversation=conversation,
+                    calls_col=calls_col,
+                )
+
+                tool_roundtrip_messages = list(messages)
+                tool_roundtrip_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": first_msg.content or "",
+                        "tool_calls": tool_calls_for_message,
+                    }
+                )
+                for item in tool_outputs_for_model:
+                    tool_roundtrip_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": item["tool_call_id"],
+                            "content": item["output"],
+                        }
+                    )
+                final_response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=tool_roundtrip_messages,
+                    temperature=0.7,
+                    max_tokens=300,
+                )
+                ai_response = final_response.choices[0].message.content or ""
+            else:
+                ai_response = first_msg.content or ""
+
+        if not ai_response.strip():
+            ai_response = await get_agent_response(conversation.transcript, req.language_mode)
+
+        assistant_entry = TranscriptEntry(role="assistant", message=ai_response, timestamp=now_iso())
+        conversation.transcript.append(assistant_entry)
 
         lead, conversation = await refresh_sales_state_from_transcript(lead, conversation, mark_in_progress=True)
 
@@ -94,6 +190,7 @@ async def handle_message(req: MessageRequest):
             "objections": conversation.objections,
             "buying_signals": conversation.buying_signals,
             "next_best_action": lead.next_best_action,
+            "tools_fired": tools_fired,
         }
     except CouchbaseException as exc:
         raise HTTPException(status_code=503, detail=f"Couchbase error: {exc}") from exc
