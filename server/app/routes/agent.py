@@ -1,3 +1,4 @@
+import json
 import uuid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -8,9 +9,14 @@ from app.models.lead import Lead
 from app.models.conversation import Conversation, TranscriptEntry
 from app.services.ai_agent import get_agent_response, generate_conversation_summary
 from app.services.agent_tools import (
-    SALES_AGENT_TOOLS,
-    TOOL_RUNTIME_INSTRUCTIONS,
     execute_agent_tool_calls,
+    infer_tool_calls_from_message,
+    get_tool_runtime_instructions,
+    get_tools_for_flow,
+)
+from app.services.state_sanitizer import (
+    sanitize_conversation_dict,
+    sanitize_lead_dict,
 )
 from app.services.prompt_registry import get_system_prompt
 from app.services.sales_workflow import (
@@ -18,7 +24,8 @@ from app.services.sales_workflow import (
     now_iso,
     refresh_sales_state_from_transcript,
 )
-from app.db.couchbase import get_active_flow, get_collection
+from app.services.email_service import send_b2b_follow_up_email, is_valid_email
+from app.db.couchbase import get_active_flow, get_collection, get_scope
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -44,18 +51,11 @@ async def start_conversation(req: StartRequest):
     try:
         lead_id, conversation_id, _, _ = create_lead_and_conversation(campaign_id=req.campaign_id)
 
-        if get_active_flow() == "b2c":
-            greeting = (
-                "Hi! I'm the Workflow PH Commerce Agent. "
-                "I can help you find the right product and guide you through checkout. "
-                "What kind of product are you looking for today?"
-            )
-        else:
-            greeting = (
-                "Hi! I'm the Workflow PH Sales Agent. "
-                "I'm here to help understand your business and find the best solution for you. "
-                "Can you tell me a little about your business and what you're looking to improve?"
-            )
+        greeting = (
+            "Hi! I'm the FFlow PH Sales Agent. "
+            "I'm here to help understand your business and find the best solution for you. "
+            "Can you tell me a little about your business and what you're looking to improve?"
+        )
 
         return {
             "lead_id": lead_id,
@@ -75,11 +75,14 @@ async def handle_message(req: MessageRequest):
         conversations_col = get_collection("conversations")
         leads_col = get_collection("leads")
         calls_col = get_collection("discovery_calls")
+        products_col = get_collection("products")
+        orders_col = get_collection("orders")
+        scope = get_scope()
 
         conversation_result = conversations_col.get(req.conversation_id)
-        conversation = Conversation(**conversation_result.content_as[dict])
+        conversation = Conversation(**sanitize_conversation_dict(conversation_result.content_as[dict]))
         lead_result = leads_col.get(req.lead_id)
-        lead = Lead(**lead_result.content_as[dict])
+        lead = Lead(**sanitize_lead_dict(lead_result.content_as[dict]))
 
         if conversation.lead_id != req.lead_id:
             raise HTTPException(
@@ -105,28 +108,74 @@ async def handle_message(req: MessageRequest):
             for entry in conversation.transcript:
                 messages.append({"role": entry.role, "content": entry.message})
 
-            if active_flow == "b2b":
-                system += "\n\n" + TOOL_RUNTIME_INSTRUCTIONS
-                messages[0] = {"role": "system", "content": system}
-                first_response = await client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    tools=SALES_AGENT_TOOLS,
-                    tool_choice="auto",
-                    temperature=0.4,
-                    max_tokens=300,
-                )
-            else:
-                first_response = await client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=300,
-                )
+            tools = get_tools_for_flow(active_flow)
+            system += "\n\n" + get_tool_runtime_instructions(active_flow)
+            messages[0] = {"role": "system", "content": system}
+            first_response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.4,
+                max_tokens=300,
+            )
             first_msg = first_response.choices[0].message
             first_tool_calls = first_msg.tool_calls or []
 
-            if active_flow == "b2b" and first_tool_calls:
+            if active_flow == "b2c":
+                inferred_calls = infer_tool_calls_from_message(
+                    flow=active_flow,
+                    message=req.message,
+                    conversation=conversation,
+                )
+                if inferred_calls:
+                    if first_tool_calls:
+                        existing_names = {
+                            (getattr(getattr(tc, "function", None), "name", "") or "").strip()
+                            for tc in first_tool_calls
+                        }
+                        merged_inferred = [call for call in inferred_calls if call.get("name") not in existing_names]
+                        if merged_inferred:
+                            first_tool_calls = list(first_tool_calls)
+                            for item in merged_inferred:
+                                first_tool_calls.append(
+                                    type(
+                                        "_SyntheticToolCall",
+                                        (),
+                                        {
+                                            "id": item.get("id", ""),
+                                            "function": type(
+                                                "_SyntheticFunction",
+                                                (),
+                                                {
+                                                    "name": item.get("name", ""),
+                                                    "arguments": json.dumps(item.get("arguments", {})),
+                                                },
+                                            )(),
+                                        },
+                                    )()
+                                )
+                    else:
+                        first_tool_calls = [
+                            type(
+                                "_SyntheticToolCall",
+                                (),
+                                {
+                                    "id": item.get("id", ""),
+                                    "function": type(
+                                        "_SyntheticFunction",
+                                        (),
+                                        {
+                                            "name": item.get("name", ""),
+                                            "arguments": json.dumps(item.get("arguments", {})),
+                                        },
+                                    )(),
+                                },
+                            )()
+                            for item in inferred_calls
+                        ]
+
+            if first_tool_calls:
                 normalized_calls: list[dict] = []
                 tool_calls_for_message: list[dict] = []
                 for tc in first_tool_calls:
@@ -154,11 +203,15 @@ async def handle_message(req: MessageRequest):
 
                 tools_fired, tool_outputs_for_model = await execute_agent_tool_calls(
                     tool_calls=normalized_calls,
+                    flow=active_flow,
                     lead_id=req.lead_id,
                     conversation_id=req.conversation_id,
                     lead=lead,
                     conversation=conversation,
+                    scope=scope,
                     calls_col=calls_col,
+                    products_col=products_col,
+                    orders_col=orders_col,
                 )
 
                 tool_roundtrip_messages = list(messages)
@@ -194,9 +247,13 @@ async def handle_message(req: MessageRequest):
         conversation.transcript.append(assistant_entry)
 
         lead, conversation = await refresh_sales_state_from_transcript(lead, conversation, mark_in_progress=True)
+        lead_payload = sanitize_lead_dict(lead.model_dump())
+        conversation_payload = sanitize_conversation_dict(conversation.model_dump())
+        lead = Lead(**lead_payload)
+        conversation = Conversation(**conversation_payload)
 
-        leads_col.replace(req.lead_id, lead.model_dump())
-        conversations_col.replace(req.conversation_id, conversation.model_dump())
+        leads_col.replace(req.lead_id, lead_payload)
+        conversations_col.replace(req.conversation_id, conversation_payload)
 
         return {
             "response": ai_response,
@@ -230,8 +287,8 @@ async def end_conversation(req: EndRequest):
 
         lead_result = leads_col.get(req.lead_id)
         conversation_result = conversations_col.get(req.conversation_id)
-        lead = Lead(**lead_result.content_as[dict])
-        conversation = Conversation(**conversation_result.content_as[dict])
+        lead = Lead(**sanitize_lead_dict(lead_result.content_as[dict]))
+        conversation = Conversation(**sanitize_conversation_dict(conversation_result.content_as[dict]))
 
         if conversation.lead_id != req.lead_id:
             raise HTTPException(
@@ -255,8 +312,16 @@ async def end_conversation(req: EndRequest):
         lead.status = "qualified"
         lead.updated_at = ts
 
-        follow_up_data = await generate_follow_up(lead)
+        try:
+            follow_up_data = await generate_follow_up(lead)
+        except Exception:
+            follow_up_data = {
+                "subject": f"Next steps for {lead.company or 'your business'}",
+                "body": "Thanks for your time today. We will send follow-up details shortly.",
+            }
         follow_up_id = f"followup::{uuid.uuid4()}"
+        lead.follow_up_subject = follow_up_data["subject"]
+        lead.follow_up_body = follow_up_data["body"]
         follow_up_doc = {
             "type": "follow_up",
             "lead_id": req.lead_id,
@@ -264,10 +329,66 @@ async def end_conversation(req: EndRequest):
             "body": follow_up_data["body"],
             "status": "draft",
             "created_at": ts,
+            "delivery_status": "skipped_no_email",
+            "delivered_at": None,
+            "delivery_error": None,
+            "provider": "smtp",
+            "provider_message_id": None,
         }
 
-        leads_col.replace(req.lead_id, lead.model_dump())
-        conversations_col.replace(req.conversation_id, conversation.model_dump())
+        email_delivery = {
+            "status": "skipped_no_email",
+            "provider": "smtp",
+            "message_id": None,
+            "error": None,
+        }
+
+        active_flow = get_active_flow()
+        recipient_email = (lead.email or "").strip().lower()
+        if active_flow == "b2b" and recipient_email:
+            if is_valid_email(recipient_email):
+                delivery = send_b2b_follow_up_email(
+                    to_email=recipient_email,
+                    subject=follow_up_data["subject"],
+                    body=follow_up_data["body"],
+                )
+                if delivery.get("success"):
+                    follow_up_doc["delivery_status"] = "sent"
+                    follow_up_doc["delivered_at"] = now_iso()
+                    follow_up_doc["provider_message_id"] = delivery.get("message_id")
+                    email_delivery = {
+                        "status": "sent",
+                        "provider": delivery.get("provider", "smtp"),
+                        "message_id": delivery.get("message_id"),
+                        "error": None,
+                    }
+                else:
+                    follow_up_doc["delivery_status"] = "failed"
+                    follow_up_doc["delivery_error"] = delivery.get("error")
+                    follow_up_doc["provider_message_id"] = delivery.get("message_id")
+                    email_delivery = {
+                        "status": "failed",
+                        "provider": delivery.get("provider", "smtp"),
+                        "message_id": delivery.get("message_id"),
+                        "error": delivery.get("error"),
+                    }
+            else:
+                follow_up_doc["delivery_status"] = "failed"
+                follow_up_doc["delivery_error"] = "invalid_recipient_email"
+                email_delivery = {
+                    "status": "failed",
+                    "provider": "smtp",
+                    "message_id": None,
+                    "error": "invalid_recipient_email",
+                }
+
+        lead_payload = sanitize_lead_dict(lead.model_dump())
+        conversation_payload = sanitize_conversation_dict(conversation.model_dump())
+        lead = Lead(**lead_payload)
+        conversation = Conversation(**conversation_payload)
+
+        leads_col.replace(req.lead_id, lead_payload)
+        conversations_col.replace(req.conversation_id, conversation_payload)
         follow_ups_col.insert(follow_up_id, follow_up_doc)
 
         conversation_payload = conversation.model_dump()
@@ -280,6 +401,7 @@ async def end_conversation(req: EndRequest):
             "conversation": conversation_payload,
             "follow_up": follow_up_payload,
             "follow_up_id": follow_up_id,
+            "email_delivery": email_delivery,
         }
     except DocumentNotFoundException:
         raise HTTPException(status_code=404, detail="Lead or conversation not found")

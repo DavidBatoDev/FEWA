@@ -85,6 +85,7 @@ Fields:
 - `objections`: `string[]`
 - `buying_signals`: `string[]`
 - `tool_activity_log`: `object[]`
+- `commerce_state`: `object` (optional runtime state for B2C tool flow)
 - `created_at`, `updated_at`: ISO timestamp strings
 
 ### `follow_ups`
@@ -97,6 +98,11 @@ Fields:
 - `body`: `string`
 - `status`: usually `"draft"`
 - `created_at`: ISO timestamp string
+- `delivery_status`: `"sent"|"failed"|"skipped_no_email"` (B2B end-flow delivery metadata)
+- `delivered_at`: ISO timestamp string|null
+- `delivery_error`: `string|null`
+- `provider`: `string` (currently `smtp`)
+- `provider_message_id`: `string|null`
 
 ### `campaigns`
 Purpose: campaign setup and qualification config.

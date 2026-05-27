@@ -1,6 +1,5 @@
-from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 LeadTemperature = Literal["Hot", "Warm", "Cold"]
 LeadStatus = Literal["new", "in_progress", "qualified", "disqualified"]
@@ -25,14 +24,18 @@ class Lead(BaseModel):
     call_slot: Optional[str] = None
     context_status: Optional[str] = None
     conversation_summary: Optional[str] = None
-    objections: list[str] = []
-    buying_signals: list[str] = []
+    follow_up_subject: Optional[str] = None
+    follow_up_body: Optional[str] = None
+    objections: list[str] = Field(default_factory=list)
+    buying_signals: list[str] = Field(default_factory=list)
     lead_score: int = 0
     lead_temperature: Optional[LeadTemperature] = None
     asked_for_proposal: Optional[bool] = False
     score_breakdown: Optional[dict] = None
     recommended_offer: Optional[str] = None
     next_best_action: Optional[str] = None
+    is_potential_lead: bool = False
+    discovery_call_schedule: Optional[str] = None
     status: LeadStatus = "new"
     created_at: str = ""
     updated_at: str = ""

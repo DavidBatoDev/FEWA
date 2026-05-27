@@ -32,6 +32,16 @@ This directory contains test files for the PDF extraction feature.
   - Includes unit-style mocked DB tests
   - Includes live integration tests against `http://127.0.0.1:8000` for B2B/B2C DB routes
   - Live tests create real `intake_forms`, `leads`, and `orders` records
+- **test_tool_calling_stability.py** - Tool-calling stability checks
+  - Validates sanitizer coercion for malformed extracted values
+  - Verifies graceful fallback behavior when tool handlers fail
+  - Verifies deterministic B2C 6-tool runtime sequence with order persistence
+- **test_follow_up_format.py** - Follow-up email content format checks
+  - Validates meeting-notes style sections and discovery schedule inclusion
+- **test_email_service.py** - SMTP service behavior checks
+  - Validates success/failure/invalid-recipient paths for email delivery
+- **test_agent_end_email_delivery.py** - `/agent/end` delivery integration checks (mocked)
+  - Validates `sent`, `failed`, and `skipped_no_email` response/persistence behavior
 
 ### Database Population
 - **populate_test_data.py** - Populates test data into Couchbase via API calls
@@ -80,6 +90,20 @@ uvicorn app.main:app --reload --port 8000
 # Terminal 2
 cd ..
 python -m unittest server.tests.test_db_routes_schema_contract.TestDatabaseRouteSchemaContractLiveAPI -v
+```
+
+### Run Tool-Calling Stability Tests
+```bash
+cd ..
+python -m unittest server.tests.test_tool_calling_stability -v
+```
+
+### Run Follow-up + Email Delivery Tests
+```bash
+cd ..
+python -m unittest server.tests.test_follow_up_format -v
+python -m unittest server.tests.test_email_service -v
+python -m unittest server.tests.test_agent_end_email_delivery -v
 ```
 
 ### Populate Test Data into Database

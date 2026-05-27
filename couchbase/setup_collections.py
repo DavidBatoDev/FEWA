@@ -14,37 +14,28 @@ load_dotenv(Path(__file__).parent.parent / "server" / ".env")
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
 from couchbase.options import ClusterOptions
-from couchbase.exceptions import ScopeAlreadyExistsException, CollectionAlreadyExistsException
+from couchbase.exceptions import ScopeAlreadyExistsException, CollectionAlreadyExistsException, QueryIndexAlreadyExistsException
 
 CONNECTION_STRING = os.getenv("COUCHBASE_CONNECTION_STRING", "")
 USERNAME = os.getenv("COUCHBASE_USERNAME", "")
 PASSWORD = os.getenv("COUCHBASE_PASSWORD", "")
-BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "workflow_ph")
-SCOPE_NAMES_RAW = os.getenv("COUCHBASE_PROVISION_SCOPES", "sales_agent,b2b,b2c")
+BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "fflow_ph")
+SCOPE_NAME = os.getenv("COUCHBASE_SCOPE", "sales_agent")
 
-COLLECTIONS = [
-    "campaigns",
-    "leads",
-    "products",
-    "orders",
-    "conversations",
-    "offers",
-    "follow_ups",
-    "intake_forms",
-    "lead_context_docs",
-    "discovery_calls",
+COLLECTIONS = ["campaigns", "leads", "conversations", "offers", "follow_ups"]
+
+INDEXES = [
+    f"CREATE PRIMARY INDEX IF NOT EXISTS ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`",
+    f"CREATE INDEX IF NOT EXISTS idx_leads_temperature ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`(lead_temperature)",
+    f"CREATE INDEX IF NOT EXISTS idx_leads_status ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`(status)",
+    f"CREATE INDEX IF NOT EXISTS idx_leads_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`(created_at)",
+    f"CREATE INDEX IF NOT EXISTS idx_conversations_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`conversations`(lead_id)",
+    f"CREATE INDEX IF NOT EXISTS idx_conversations_lead_latest ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`conversations`(lead_id, updated_at DESC, created_at DESC)",
+    f"CREATE INDEX IF NOT EXISTS idx_conversations_objections_norm ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`conversations`(DISTINCT ARRAY LOWER(TRIM(objection)) FOR objection IN objections END)",
+    f"CREATE INDEX IF NOT EXISTS idx_followups_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(lead_id)",
+    f"CREATE INDEX IF NOT EXISTS idx_followups_lead_latest ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(lead_id, created_at DESC)",
+    f"CREATE INDEX IF NOT EXISTS idx_followups_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(created_at)",
 ]
-
-def _parse_scope_names(raw: str) -> list[str]:
-    seen = set()
-    scopes: list[str] = []
-    for part in raw.split(","):
-        value = part.strip()
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        scopes.append(value)
-    return scopes
 
 
 def _indexes_for_scope(scope_name: str) -> list[str]:

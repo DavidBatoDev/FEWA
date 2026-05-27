@@ -94,6 +94,8 @@ type TranscriptItem = {
 
 const DEFAULT_AGENT_UID = "1001";
 const VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"];
+const TTS_SPEED_DEFAULT = 1.2;
+const TTS_SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.2, 1.5, 2.0];
 const AUDIO_REPUBLISH_FLAP_WINDOW_MS = 1200;
 const AI_DENOISER_ASSETS_PATH = "/external";
 const AI_DENOISER_MODE_NSNG = "NSNG" as AIDenoiserProcessorMode;
@@ -165,6 +167,7 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
   const [channelName, setChannelName] = useState(() => queryChannel || generateDefaultChannelName());
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
   const [voice, setVoice] = useState(() => queryVoice || "alloy");
+  const [ttsSpeed, setTtsSpeed] = useState(TTS_SPEED_DEFAULT);
   const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
 
   // Sync state refs on inputs
@@ -771,8 +774,10 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
         user_uid,
         agent_uid: requestedAgentUid,
         tts_voice: voice,
+        tts_speed: ttsSpeed,
         knowledge: knowledge || undefined,
-        flow: agentType === "sales" ? "b2b" : "b2c"
+        flow: agentType === "sales" ? "b2b" : "b2c",
+        agent_type: agentType
       });
 
       // Clear the knowledge after starting

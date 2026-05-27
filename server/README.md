@@ -46,6 +46,14 @@ Fill in:
 - `AGORA_CONVO_DEFAULT_PRESET`
 - `AGORA_CONVO_DEFAULT_TTS_VOICE`
 - `AGORA_CONVO_DEFAULT_IDLE_TIMEOUT`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_USE_TLS`
+- `SMTP_TIMEOUT_SECONDS`
 
 Hackathon tip for teammate-safe isolation:
 - Use a personal scope value (example: `COUCHBASE_SCOPE=sales_agent_augus`) so your test traffic does not mix with your teammate's data.
