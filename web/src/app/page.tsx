@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AgentCard } from "@/components/AgentCard";
+import { CalendarDemo } from "@/components/CalendarDemo";
 import { 
   Cpu, 
   Sparkles, 
@@ -28,17 +30,36 @@ import {
   ChevronRight,
   Code
 } from "lucide-react";
-import { CalendarDemo } from "@/components/CalendarDemo";
 
-type TabId = "home" | "sales" | "commerce" | "calendar" | "comparison" | "tech" | "db";
+// Scroll reveal observer
+function useScrollReveal() {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("reveal-visible");
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
+    );
 
-export default function HomeWorkspace() {
+    const elements = document.querySelectorAll(".reveal-item, .reveal-item-slide-top, .reveal-item-slide-up");
+    elements.forEach((el) => observer.observe(el));
+
+    return () => {
+      elements.forEach((el) => observer.unobserve(el));
+    };
+  }, []);
+}
+
+export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("home");
-  const [selectedModel, setSelectedModel] = useState<"sales" | "commerce">("sales");
-  
-  // States for B2B simulated logs
-  const [salesLogsCount, setSalesLogsCount] = useState(1);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [selectedAgent, setSelectedAgent] = useState<"sales" | "commerce">("sales");
+  const [animateKey, setAnimateKey] = useState(0);
+
   const salesLogs = [
     { tool: "extract_lead_info()", time: "00:08", detail: "Company: ABC Logistics" },
     { tool: "extract_lead_info()", time: "00:21", detail: "Pain: Lost inquiries" },
@@ -49,8 +70,6 @@ export default function HomeWorkspace() {
     { tool: "generate_follow_up()", time: "01:45", detail: "Email draft ready" }
   ];
 
-  // States for B2C simulated logs
-  const [commerceLogsCount, setCommerceLogsCount] = useState(1);
   const commerceLogs = [
     { tool: "extract_preferences()", time: "00:12", detail: "Use case: Programming" },
     { tool: "extract_preferences()", time: "00:25", detail: "Budget: ₱60,000" },
@@ -61,732 +80,570 @@ export default function HomeWorkspace() {
     { tool: "checkout_prep()", time: "01:30", detail: "Ref: WPH-2026-00142" }
   ];
 
-  // Couchbase JSON explorer state
-  const [activeJsonDoc, setActiveJsonDoc] = useState<"logistics" | "buyer">("logistics");
-
-  const logisticsJson = `{
-  "type": "lead",
-  "campaign_id": "campaign::sme-sales",
-  "company": "ABC Logistics",
-  "industry": "Logistics & Fleet",
-  "pain_point": "Lost inquiries, poor call tracking",
-  "timeline": "Immediate (This month)",
-  "decision_maker": true,
-  "objections": [
-    "Pricing concerns"
-  ],
-  "lead_score": 90,
-  "lead_temperature": "Hot",
-  "recommended_offer": "Sales Automation Package",
-  "status": "call_booked",
-  "created_at": "2026-05-27T12:00:00Z"
-}`;
-
-  const buyerJson = `{
-  "type": "commerce_cart",
-  "campaign_id": "campaign::electronics-b2c",
-  "customer": {
-    "name": "Juan dela Cruz",
-    "phone": "0917-889-1243",
-    "delivery_address": "Project 4, Quezon City"
-  },
-  "preferences": {
-    "use_case": "Programming & Web Dev",
-    "budget_max": 60000,
-    "brand_preference": "Lenovo"
-  },
-  "items": [
-    {
-      "sku": "prod::lenovo-e14",
-      "name": "Lenovo ThinkPad E14 Gen 5",
-      "price": 58999,
-      "qty": 1
-    }
-  ],
-  "totals": {
-    "subtotal": 58999,
-    "shipping": 0,
-    "total": 58999
-  },
-  "payment": {
-    "method": "GCash Scan",
-    "reference": "WPH-2026-00142",
-    "status": "paid"
-  }
-}`;
-
   useEffect(() => {
     setMounted(true);
-    
-    // Cycle B2B simulated logs
-    const salesInterval = setInterval(() => {
-      setSalesLogsCount((prev) => (prev % salesLogs.length) + 1);
-    }, 2500);
 
-    // Cycle B2C simulated logs
-    const commerceInterval = setInterval(() => {
-      setCommerceLogsCount((prev) => (prev % commerceLogs.length) + 1);
-    }, 2500);
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalScroll > 0) {
+        setScrollProgress((window.scrollY / totalScroll) * 100);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
 
     return () => {
-      clearInterval(salesInterval);
-      clearInterval(commerceInterval);
+      window.removeEventListener("scroll", handleScroll);
     };
-  }, [salesLogs.length, commerceLogs.length]);
+  }, []);
+
+  useScrollReveal();
 
   if (!mounted) return null;
 
   return (
-    <div className="dark h-screen w-full bg-zinc-950 text-white font-sans flex overflow-hidden">
+    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black scroll-smooth relative">
       
-      {/* 1. LEFT SIDEBAR: Navigation Menu Panel (Canva Style) */}
-      <div className="w-[280px] shrink-0 border-r border-white/[0.06] bg-zinc-900/60 backdrop-blur-xl flex flex-col h-full">
-        
-        {/* Workspace Brand Header */}
-        <div className="p-6 border-b border-white/[0.05] flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 font-bold text-black transition-transform duration-300 group-hover:scale-105">
-              F
-              <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 animate-pulse" />
-            </div>
-            <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-              FFlow<span className="text-cyan-400">.ph</span>
-            </span>
-          </Link>
-          <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.05]">
-            v2.0
+      {/* Scroll indicator bar at top (Likas AI style) */}
+      <div 
+        className="fixed left-0 top-0 z-50 h-1 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-100" 
+        style={{ width: `${scrollProgress}%` }}
+      />
+
+      {/* Floating frosted-glass header navbar (Likas style) */}
+      <nav className="fixed left-1/2 top-5 z-40 w-[min(1180px,calc(100%-48px))] -translate-x-1/2 flex items-center justify-between rounded-full border border-white/5 bg-zinc-900/60 px-5 py-3.5 shadow-xl shadow-black/35 backdrop-blur-xl transition-all duration-300">
+        <a href="#top" className="flex items-center gap-2 group">
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 font-bold text-black transition-transform duration-300 group-hover:scale-105">
+            F
+            <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 animate-pulse" />
+          </div>
+          <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-400 transition-colors">
+            FFlow<span className="text-cyan-400">.ph</span>
           </span>
+        </a>
+        
+        <div className="hidden md:flex items-center gap-6 text-xs font-semibold text-zinc-400 tracking-wider uppercase">
+          <a href="#agents" className="hover:text-white transition-all duration-200">Agents</a>
+          <a href="#demo-booking" className="hover:text-white transition-all duration-200 font-bold text-cyan-400">Calendar Demo</a>
+          <a href="#comparison" className="hover:text-white transition-all duration-200">Why FFlow.ph</a>
+          <a href="#tech-stack" className="hover:text-white transition-all duration-200">Tech Stack</a>
+          <Link href="/dashboard" className="hover:text-white transition-all duration-200 flex items-center gap-1">
+            <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+            Live Dashboard
+          </Link>
+          <Link href="/leads" className="hover:text-white transition-all duration-200 flex items-center gap-1">
+            <FileText className="w-3.5 h-3.5 text-purple-400" />
+            Record Detail
+          </Link>
         </div>
 
-        {/* Navigation Categories */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7">
-          
-          {/* Main workspace section */}
-          <div className="space-y-1.5">
-            <h4 className="px-3 text-[9px] font-black tracking-widest text-zinc-500 uppercase mb-2">
-              Design Workspace
-            </h4>
-            
-            {[
-              { id: "home", label: "Dashboard Home", icon: Home, color: "text-cyan-400" },
-              { id: "sales", label: "B2B Sales Agent", icon: Building, color: "text-cyan-400" },
-              { id: "commerce", label: "B2C Commerce Agent", icon: ShoppingBag, color: "text-purple-400" },
-              { id: "calendar", label: "Interactive Calendar", icon: Calendar, color: "text-amber-400" },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id as TabId)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
-                    isActive 
-                      ? "bg-white/[0.06] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" 
-                      : "text-zinc-400 hover:bg-white/[0.02] hover:text-zinc-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? item.color : "text-zinc-500"}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {isActive && <div className={`h-1.5 w-1.5 rounded-full ${item.id === "commerce" ? "bg-purple-400" : item.id === "calendar" ? "bg-amber-400" : "bg-cyan-400"}`} />}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Database & Technical section */}
-          <div className="space-y-1.5">
-            <h4 className="px-3 text-[9px] font-black tracking-widest text-zinc-500 uppercase mb-2">
-              Utilities & Data
-            </h4>
-            
-            {[
-              { id: "comparison", label: "Agora vs FFlow.ph", icon: Layers3, color: "text-emerald-400" },
-              { id: "tech", label: "Tech Stack Nodes", icon: Cpu, color: "text-blue-400" },
-              { id: "db", label: "Couchbase DB Explorer", icon: Database, color: "text-pink-400" },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id as TabId)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
-                    isActive 
-                      ? "bg-white/[0.06] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" 
-                      : "text-zinc-400 hover:bg-white/[0.02] hover:text-zinc-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? item.color : "text-zinc-500"}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {isActive && <div className={`h-1.5 w-1.5 rounded-full ${item.color}`} />}
-                </button>
-              );
-            })}
-          </div>
-
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-white/[0.05] bg-zinc-950/40 text-[10px] space-y-3 font-sans shrink-0">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Database className="w-3.5 h-3.5 text-pink-400" />
-            <span>DB Status:</span>
-            <span className="font-mono text-emerald-400 font-bold uppercase">Online</span>
-          </div>
-          <Link
-            href="/campaign"
-            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] py-2 font-bold text-white transition-all text-xs"
+        <div className="flex items-center gap-3">
+          <Link 
+            href="/campaign" 
+            className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5"
           >
             <Settings className="w-3.5 h-3.5 text-zinc-400" />
-            Configure Engine
+            Configure Settings
           </Link>
         </div>
-      </div>
+      </nav>
 
-      {/* 2. RIGHT PREVIEW PANEL: Large Dynamic Workspace (Canva Workspace Style) */}
-      <div className="flex-1 flex flex-col h-full bg-zinc-950 overflow-hidden relative">
+      {/* Viewport scroll reveal style rules */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .reveal-item {
+          opacity: 0;
+          transform: translateY(28px);
+          transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-item.reveal-visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .reveal-item-slide-top {
+          opacity: 0;
+          transform: translateY(-60px);
+          transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-item-slide-top.reveal-visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .reveal-item-slide-up {
+          opacity: 0;
+          transform: translateY(60px);
+          transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-item-slide-up.reveal-visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
         
-        {/* Background decorative glows */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-cyan-500/5 via-purple-500/5 to-transparent blur-3xl -z-10" />
+        /* 3D Rotating Phone Mockup Keyframes */
+        @keyframes phone3DRotation {
+          0% {
+            transform: rotateY(-18deg) rotateX(12deg) rotateZ(-1deg);
+          }
+          50% {
+            transform: rotateY(18deg) rotateX(18deg) rotateZ(1deg);
+          }
+          100% {
+            transform: rotateY(-18deg) rotateX(12deg) rotateZ(-1deg);
+          }
+        }
+        .animate-phone-3d {
+          animation: phone3DRotation 6s ease-in-out infinite;
+          transform-style: preserve-3d;
+        }
 
-        {/* Workspace Top Header Bar */}
-        <header className="h-16 border-b border-white/[0.06] bg-zinc-950/70 backdrop-blur-md px-8 flex items-center justify-between shrink-0">
-          <h2 className="text-sm font-bold tracking-wider text-zinc-300 uppercase flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
-            Active Workspace: {activeTab === "home" ? "Home Dashboard" : activeTab === "sales" ? "B2B Sales Agent" : activeTab === "commerce" ? "B2C Commerce Agent" : activeTab === "calendar" ? "Interactive Wall Calendar" : activeTab === "comparison" ? "Comparative Features Matrix" : activeTab === "tech" ? "Technology Node Graph" : "Couchbase Document Database"}
-          </h2>
+        /* 3D Phone screen items animations */
+        @keyframes floatItem {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-6px) rotate(0.5deg); }
+        }
+        .animate-float-item {
+          animation: floatItem 4s ease-in-out infinite;
+        }
 
-          <div className="flex items-center gap-3">
-            {/* Live Indicator */}
-            <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 bg-white/[0.02] border border-white/[0.05] px-3.5 py-1.5 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              May 27, 2026
+        @keyframes pulseRing {
+          0% { transform: scale(0.95); opacity: 0.2; }
+          50% { transform: scale(1.1); opacity: 0.6; }
+          100% { transform: scale(0.95); opacity: 0.2; }
+        }
+        .animate-pulse-ring {
+          animation: pulseRing 3s ease-in-out infinite;
+        }
+
+        @keyframes rotateRadar {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-rotate-radar {
+          animation: rotateRadar 15s linear infinite;
+        }
+
+        @keyframes waveGrow {
+          0%, 100% { height: 12px; }
+          50% { height: 32px; }
+        }
+        .animate-wave-bar {
+          animation: waveGrow 1.2s ease-in-out infinite;
+        }
+
+        /* Slide in from top animation for choices on select */
+        @keyframes slideDownFromTop {
+          0% {
+            opacity: 0;
+            transform: translateY(-40px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slide-top {
+          animation: slideDownFromTop 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}} />
+
+      {/* 2. HERO SECTION */}
+      <section id="top" className="relative min-h-screen px-6 pt-32 pb-24 md:pt-40 flex items-center overflow-hidden">
+        
+        {/* Background visual components */}
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-1/3 left-1/4 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-gradient-to-tr from-cyan-500/10 via-blue-500/5 to-transparent blur-3xl" />
+          <div className="absolute top-1/2 right-1/4 translate-x-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-purple-500/5 via-pink-500/5 to-transparent blur-3xl" />
+          
+          <div className="absolute top-[18%] right-[-180px] h-[600px] w-[600px] border border-white/[0.02] rounded-full opacity-45 animate-[spin_120s_linear_infinite]" />
+          <div className="absolute bottom-[8%] left-[-220px] h-[500px] w-[500px] border border-dashed border-white/[0.02] rounded-full opacity-35 animate-[spin_80s_linear_infinite_reverse]" />
+        </div>
+
+        <div className="mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-14 pt-6">
+          
+          {/* Hero Left Content */}
+          <div className="space-y-6 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-4 py-1.5 text-xs font-bold text-cyan-400 tracking-wide uppercase">
+              <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: "6s" }} />
+              Powered by Agora Conversational AI
             </div>
             
-            {/* Direct Console Launch Shortcut */}
-            <Link
-              href="/agent"
-              className="rounded-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold px-4 py-1.5 text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)] hover:scale-102 flex items-center gap-1"
-            >
-              <span>AI Console</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </header>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
+              Turn Voice Conversations Into{" "}
+              <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent block mt-2">
+                Business Outcomes
+              </span>
+            </h1>
 
-        {/* Dynamic Workspace Body */}
-        <div className="flex-1 overflow-y-auto p-8">
+            <p className="text-base sm:text-lg text-zinc-300 max-w-2xl leading-relaxed mx-auto lg:mx-0">
+              The first vertical AI voice agent platform built specifically for Philippine businesses. 
+              We extend Agora&apos;s Conversational AI infrastructure with FFlow.ph&apos;s custom workflow layer—pre-built sales qualification, lead scoring, and instant e-commerce checkouts.
+            </p>
 
-          {/* ==================== TAB 1: HOME ==================== */}
-          {activeTab === "home" && (
-            <div className="space-y-8 max-w-5xl">
-              {/* Frosted Welcome Banner */}
-              <div className="relative rounded-3xl border border-white/[0.07] bg-zinc-900/40 p-8 overflow-hidden backdrop-blur-xl shadow-[0_15px_30px_rgba(0,0,0,0.3)]">
-                <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-gradient-to-tr from-cyan-500/10 to-blue-600/10 blur-[30px]" />
-                
-                <div className="max-w-2xl space-y-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-3 py-1 text-[10px] font-bold text-cyan-400 tracking-wide uppercase">
-                    <Sparkles className="w-3 h-3 animate-spin" style={{ animationDuration: "5s" }} />
-                    Agora Conversational AI Core
-                  </div>
-                  
-                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
-                    Turn Voice Conversations Into <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Structured Outcomes</span>
-                  </h1>
-                  
-                  <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                    The Philippine vertical AI agent console. Leverage sub-second latency voice channels to extract qualifiers, compute lead scores, objection handle, comparison-match, and generate checkout reference numbers on the fly.
-                  </p>
-                </div>
-              </div>
-
-              {/* KPI Cards Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {[
-                  { label: "Lead qualification Rate", val: "90%", desc: "B2B discovery success factor", color: "from-cyan-400 to-blue-500" },
-                  { label: "B2C checkout prep", val: "24/7", desc: "Automated GCash invoices", color: "from-blue-400 to-purple-500" },
-                  { label: "Platform Mock Revenue", val: "₱1,250,000+", desc: "Couchbase analytics summary", color: "from-purple-400 to-pink-500" }
-                ].map((kpi, idx) => (
-                  <div key={idx} className="rounded-2xl border border-white/[0.05] bg-zinc-900/30 p-5 backdrop-blur-md">
-                    <span className="text-[9px] font-bold tracking-widest text-zinc-500 uppercase block">{kpi.label}</span>
-                    <span className={`text-2xl font-black bg-gradient-to-r ${kpi.color} bg-clip-text text-transparent block mt-1.5`}>{kpi.val}</span>
-                    <span className="text-[10px] text-zinc-400 mt-0.5 block">{kpi.desc}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Direct B2B vs B2C Selection Workspace */}
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase font-mono">Select Business Agent Workspace</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* B2B Selection Card */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedModel("sales")}
-                    className={`p-5 rounded-2xl border text-left transition-all flex items-start gap-4 relative ${
-                      selectedModel === "sales" 
-                        ? "border-cyan-500 bg-cyan-950/10 shadow-[0_0_20px_rgba(6,182,212,0.15)]" 
-                        : "border-white/[0.05] bg-zinc-900/20 hover:border-white/[0.1] hover:bg-zinc-900/30"
-                    }`}
-                  >
-                    <div className={`p-2.5 rounded-xl border ${selectedModel === "sales" ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400" : "bg-white/[0.02] border-white/[0.05] text-zinc-500"}`}>
-                      <Building className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-zinc-100">B2B Sales Agent</h4>
-                      <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">Qualify firmographics, evaluate urgency, score leads (0-100), and schedule discovery slots.</p>
-                    </div>
-                    {selectedModel === "sales" && (
-                      <span className="absolute top-3.5 right-3.5 h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse" />
-                    )}
-                  </button>
-
-                  {/* B2C Selection Card */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedModel("commerce")}
-                    className={`p-5 rounded-2xl border text-left transition-all flex items-start gap-4 relative ${
-                      selectedModel === "commerce" 
-                        ? "border-purple-500 bg-purple-950/10 shadow-[0_0_20px_rgba(168,85,247,0.15)]" 
-                        : "border-white/[0.05] bg-zinc-900/20 hover:border-white/[0.1] hover:bg-zinc-900/30"
-                    }`}
-                  >
-                    <div className={`p-2.5 rounded-xl border ${selectedModel === "commerce" ? "bg-purple-500/20 border-purple-500/30 text-purple-400" : "bg-white/[0.02] border-white/[0.05] text-zinc-500"}`}>
-                      <ShoppingBag className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-zinc-100">B2C Commerce Agent</h4>
-                      <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">Sync shopping carts, compare products catalog specs, and generate GCash payment QR codes.</p>
-                    </div>
-                    {selectedModel === "commerce" && (
-                      <span className="absolute top-3.5 right-3.5 h-2.5 w-2.5 rounded-full bg-purple-400 animate-pulse" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Model workspace detail panel */}
-              <div className={`rounded-3xl border p-6 bg-zinc-900/40 backdrop-blur-xl flex flex-col md:flex-row gap-8 transition-all ${
-                selectedModel === "sales" ? "border-cyan-500/30" : "border-purple-500/30"
-              }`}>
-                {/* Details column */}
-                <div className="flex-1 space-y-5">
-                  <div className="space-y-1">
-                    <span className={`text-[9px] font-mono font-bold tracking-widest uppercase ${
-                      selectedModel === "sales" ? "text-cyan-400" : "text-purple-400"
-                    }`}>
-                      {selectedModel === "sales" ? "B2B sales model directives" : "B2C e-commerce checkout model"}
-                    </span>
-                    <h3 className="text-xl font-black text-white">
-                      {selectedModel === "sales" ? "Sales Qualification Pipeline" : "Conversational Checkout Funnel"}
-                    </h3>
-                  </div>
-
-                  <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                    {selectedModel === "sales" 
-                      ? "Evaluates incoming client voice calls to verify fleet operations/company scale, industry sectors, decision maker roles, timeline scopes, and budget ranges. Synthesizes a lead score dashboard instantly."
-                      : "Supports product catalog search, side-by-side specifications comparisons, address credentials verifications, and creates automated GCash payment invoice reference numbers."
-                    }
-                  </p>
-
-                  <div className="space-y-2.5">
-                    <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Outcomes tracked by Faye</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-300">
-                      {selectedModel === "sales" ? (
-                        <>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Lead profile info qualifiers</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Objection handlers triggers</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Radial score dials (0-100)</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Live calendar demo bookings</div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" /> Shopping cart items & totals</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" /> Specs comparisons metrics</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" /> GCash scans QR invoices</div>
-                          <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" /> Shipping parameters checks</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <Link
-                      href={selectedModel === "sales" ? "/campaign?type=sales" : "/campaign?type=commerce"}
-                      className={`inline-flex items-center justify-center gap-2 rounded-2xl font-bold px-6 py-3.5 text-xs transition-all hover:scale-[1.02] ${
-                        selectedModel === "sales" 
-                          ? "bg-cyan-500 hover:bg-cyan-400 text-zinc-950 shadow-[0_0_20px_rgba(6,182,212,0.3)]" 
-                          : "bg-purple-500 hover:bg-purple-400 text-white shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-                      }`}
-                    >
-                      <span>Deploy to Campaign Setup</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Simulated Tool Activity Stream Column */}
-                <div className="w-full md:w-[280px] shrink-0 bg-zinc-950/50 rounded-2xl border border-white/[0.04] p-4 flex flex-col gap-3.5">
-                  <div className="flex justify-between items-center border-b border-white/[0.05] pb-2 shrink-0">
-                    <span className={`text-[8px] font-mono font-bold tracking-widest uppercase flex items-center gap-1.5 ${
-                      selectedModel === "sales" ? "text-cyan-400" : "text-purple-400"
-                    }`}>
-                      <span className={`w-1 h-1 rounded-full animate-ping ${selectedModel === "sales" ? "bg-cyan-400" : "bg-purple-400"}`} />
-                      Live Stream Preview
-                    </span>
-                    <span className="text-[8px] font-mono text-zinc-500 uppercase">Auto Loop</span>
-                  </div>
-
-                  <div className="space-y-2 h-[130px] overflow-y-auto font-mono text-[10px] scrollbar-thin">
-                    {(selectedModel === "sales" ? salesLogs : commerceLogs).map((log, idx) => {
-                      const limit = selectedModel === "sales" ? salesLogsCount : commerceLogsCount;
-                      const isVisible = idx < limit;
-                      return (
-                        <div
-                          key={idx}
-                          className={`flex justify-between gap-2 border-b border-white/[0.01] pb-1.5 last:border-0 transition-opacity duration-300 ${
-                            isVisible ? "opacity-100" : "opacity-10"
-                          }`}
-                        >
-                          <span className={selectedModel === "sales" ? "text-cyan-400" : "text-purple-400"}>✓</span>
-                          <span className="text-zinc-300 truncate flex-1">{log.tool}</span>
-                          <span className="text-zinc-500 shrink-0 font-light">{log.time}</span>
-                          <span className="text-zinc-400 truncate max-w-[100px]">{log.detail}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="text-[9px] text-zinc-500 leading-relaxed pt-2 border-t border-white/[0.04] text-center shrink-0">
-                    Faye visualizes these tool runs in real time on the console.
-                  </div>
-                </div>
-              </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
+              <a 
+                href="#agents"
+                className="w-full sm:w-auto rounded-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(6,182,212,0.3)] transition-all hover:scale-[1.02]"
+              >
+                <span>Select Agent Type</span>
+                <ArrowRight className="w-5 h-5" />
+              </a>
+              <Link
+                href="/dashboard"
+                className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+              >
+                <BarChart3 className="w-5 h-5 text-cyan-400" />
+                <span>View Dashboard</span>
+              </Link>
             </div>
-          )}
 
-          {/* ==================== TAB 2: B2B SALES ==================== */}
-          {activeTab === "sales" && (
-            <div className="flex flex-col lg:flex-row gap-8 max-w-5xl">
-              <div className="flex-1 space-y-6">
-                <div className="p-3.5 rounded-2xl bg-cyan-500/5 border border-cyan-500/20 inline-flex items-center gap-2">
-                  <Building className="w-5 h-5 text-cyan-400" />
-                  <span className="font-bold text-xs text-cyan-400 uppercase tracking-wide">B2B Sales Module</span>
-                </div>
-                
-                <h2 className="text-2xl font-black text-white">B2B Sales Qualification Agent</h2>
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans max-w-2xl">
-                  Qualify enterprise leads field-by-field, determine buying authority, budget readiness, and timeline urgency. Integrated with a sub-second sales scoring dial and live meeting Booker.
-                </p>
-
-                <div className="space-y-3.5">
-                  <h4 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">Capabilities</h4>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-zinc-300">
-                    {[
-                      "Real-time Lead Profiling",
-                      "Lead Score radial dials (0-100)",
-                      "Urgency timeline mapping",
-                      "Pricing Objection Handle scripts",
-                      "Meeting scheduler confirmations",
-                      "Follow-up document outlines"
-                    ].map((item, idx) => (
-                      <li key={idx} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-4">
-                  <Link
-                    href="/campaign?type=sales"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold px-6 py-3.5 text-xs transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-102"
-                  >
-                    <span>Deploy B2B Agent</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* B2B Live Simulation Log Panel */}
-              <div className="w-full lg:w-[350px] shrink-0 rounded-3xl border border-white/[0.06] bg-zinc-900/40 p-5 backdrop-blur-xl space-y-4">
-                <div className="flex justify-between items-center border-b border-white/[0.05] pb-3">
-                  <span className="text-[9px] font-mono font-bold tracking-widest text-cyan-400 uppercase flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                    Simulated Tool Stream
-                  </span>
-                  <span className="text-[9px] text-zinc-500 font-mono">Sales Rep HUD</span>
-                </div>
-
-                <div className="space-y-3 h-[180px] overflow-y-auto font-mono text-[11px]">
-                  {salesLogs.map((log, idx) => {
-                    const isVisible = idx < salesLogsCount;
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex justify-between gap-2 border-b border-white/[0.02] pb-1.5 last:border-0 transition-opacity duration-300 ${
-                          isVisible ? "opacity-100" : "opacity-10"
-                        }`}
-                      >
-                        <div className="text-zinc-300">
-                          <span className="text-cyan-400 mr-1.5">✓</span>
-                          {log.tool}
-                        </div>
-                        <div className="text-zinc-500 shrink-0 font-light">{log.time}</div>
-                        <div className="text-zinc-400 truncate max-w-[130px]">{log.detail}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-white/[0.04] text-[10px] text-zinc-500 leading-relaxed">
-                  Faye silently orchestrates the UI on the agent console to reflect these logs as they are triggered in conversation.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ==================== TAB 3: B2C COMMERCE ==================== */}
-          {activeTab === "commerce" && (
-            <div className="flex flex-col lg:flex-row gap-8 max-w-5xl">
-              <div className="flex-1 space-y-6">
-                <div className="p-3.5 rounded-2xl bg-purple-500/5 border border-purple-500/20 inline-flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-purple-400" />
-                  <span className="font-bold text-xs text-purple-400 uppercase tracking-wide">B2C Commerce Module</span>
-                </div>
-                
-                <h2 className="text-2xl font-black text-white">B2C Conversational Commerce Agent</h2>
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans max-w-2xl">
-                  Provide retail buyers with instant product specification comparisons, shopping cart updates, spelling verifications of shipping parameters, and GCash invoice reference codes.
-                </p>
-
-                <div className="space-y-3.5">
-                  <h4 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">Capabilities</h4>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-zinc-300">
-                    {[
-                      "Shopping Cart integrations",
-                      "Specifications comparisons matrix",
-                      "Budget limit validations",
-                      "Shipping Address verifications",
-                      "GCash Reference QR codes",
-                      "Preference criteria checkmarks"
-                    ].map((item, idx) => (
-                      <li key={idx} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-4">
-                  <Link
-                    href="/campaign?type=commerce"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-purple-500 hover:bg-purple-400 text-zinc-950 font-bold px-6 py-3.5 text-xs transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:scale-102"
-                  >
-                    <span>Deploy B2C Agent</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* B2C Live Simulation Log Panel */}
-              <div className="w-full lg:w-[350px] shrink-0 rounded-3xl border border-white/[0.06] bg-zinc-900/40 p-5 backdrop-blur-xl space-y-4">
-                <div className="flex justify-between items-center border-b border-white/[0.05] pb-3">
-                  <span className="text-[9px] font-mono font-bold tracking-widest text-purple-400 uppercase flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
-                    Simulated Tool Stream
-                  </span>
-                  <span className="text-[9px] text-zinc-500 font-mono">Commerce HUD</span>
-                </div>
-
-                <div className="space-y-3 h-[180px] overflow-y-auto font-mono text-[11px]">
-                  {commerceLogs.map((log, idx) => {
-                    const isVisible = idx < commerceLogsCount;
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex justify-between gap-2 border-b border-white/[0.02] pb-1.5 last:border-0 transition-opacity duration-300 ${
-                          isVisible ? "opacity-100" : "opacity-10"
-                        }`}
-                      >
-                        <div className="text-zinc-300">
-                          <span className="text-purple-400 mr-1.5">✓</span>
-                          {log.tool}
-                        </div>
-                        <div className="text-zinc-500 shrink-0 font-light">{log.time}</div>
-                        <div className="text-zinc-400 truncate max-w-[130px]">{log.detail}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-white/[0.04] text-[10px] text-zinc-500 leading-relaxed">
-                  Faye frames specifications comparison and GCash checkouts instantly on the screen as the buyer responds.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ==================== TAB 4: CALENDAR PREVIEW ==================== */}
-          {activeTab === "calendar" && (
-            <div className="max-w-5xl">
-              <CalendarDemo />
-            </div>
-          )}
-
-          {/* ==================== TAB 5: PLATFORM COMPARISON ==================== */}
-          {activeTab === "comparison" && (
-            <div className="rounded-3xl border border-white/[0.05] bg-zinc-900/30 p-6 backdrop-blur-xl max-w-4xl space-y-5">
+            {/* Micro KPI Section */}
+            <div className="grid grid-cols-3 gap-6 pt-10 border-t border-white/[0.05] max-w-lg mx-auto lg:mx-0 text-left">
               <div>
-                <h3 className="text-lg font-bold text-white mb-1.5">Core Platform Differences</h3>
-                <p className="text-xs text-zinc-400 font-sans">Compare capabilities between default Agora Studio setups and our customized FFlow.ph outcome integration layers.</p>
+                <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">90%</div>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">Lead Qual. Rate</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">24/7</div>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">B2C Checkout</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">₱1.2M+</div>
+                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">Mock Revenue</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Hero Right Content: 3D rotating phone mockup containing AI Agent Faye */}
+          <div className="w-full max-w-[450px] mx-auto flex items-center justify-center py-6" style={{ perspective: "1200px" }}>
+            <div className="animate-phone-3d w-[285px] h-[570px] rounded-[48px] border-[6px] border-zinc-800 bg-zinc-950 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),_0_0_50px_rgba(6,182,212,0.15)] relative overflow-hidden flex flex-col justify-between p-3.5 select-none">
+              
+              {/* Phone Speaker & Notch ("Dynamic Island") */}
+              <div className="absolute top-3.5 left-1/2 -translate-x-1/2 w-24 h-5 rounded-full bg-black z-30 flex items-center justify-center border border-white/[0.03]">
+                <div className="w-8 h-1 rounded-full bg-zinc-800 absolute top-1" />
+                <div className="w-2.5 h-2.5 rounded-full bg-zinc-900 border border-zinc-800 absolute right-2" />
               </div>
               
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse font-sans">
-                  <thead>
-                    <tr className="border-b border-white/[0.05] text-zinc-500 uppercase tracking-wider text-[9px] font-bold">
-                      <th className="pb-3 font-bold">Requirement</th>
-                      <th className="pb-3 font-semibold">Agora Studio Core</th>
-                      <th className="pb-3 font-bold text-cyan-400">FFlow.ph + Faye</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.03] text-zinc-300">
-                    <tr>
-                      <td className="py-4 font-bold text-zinc-200">AI Outcome Logic</td>
-                      <td className="py-4 text-zinc-400">Voice prompts & simple knowledge files</td>
-                      <td className="py-4 text-cyan-400 font-semibold flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5" /> Structured tool-calling pipeline
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 font-bold text-zinc-200">Lead qualification</td>
-                      <td className="py-4 text-zinc-400">Basic chat transcripts logs</td>
-                      <td className="py-4 text-emerald-400 font-semibold">Real-time qualifiers and score dial (0-100)</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 font-bold text-zinc-200">Commerce checkout</td>
-                      <td className="py-4 text-zinc-400">Manual JSON APIs configurations</td>
-                      <td className="py-4 text-emerald-400 font-semibold">Preference checkmarks + GCash invoices generated</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 font-bold text-zinc-200">Visual reframing</td>
-                      <td className="py-4 text-zinc-400">Not supported (voice only)</td>
-                      <td className="py-4 text-cyan-400 font-semibold">Faye AI visual organizer & screen framing glows</td>
-                    </tr>
-                    <tr>
-                      <td className="py-4 font-bold text-zinc-200">Calendar checkouts</td>
-                      <td className="py-4 text-zinc-400">Disconnect calls</td>
-                      <td className="py-4 text-emerald-400 font-semibold">Live wall calendar schedules + automated drafts</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ==================== TAB 6: TECH STACK NODES ==================== */}
-          {activeTab === "tech" && (
-            <div className="space-y-6 max-w-4xl">
-              <div>
-                <h3 className="text-lg font-bold text-white mb-1.5">Modern Technical Infrastructure</h3>
-                <p className="text-xs text-zinc-400">High-performance tech stack pre-configured for Philippine latency requirements.</p>
+              {/* Screen Top Status bar */}
+              <div className="w-full flex justify-between items-center text-[8px] font-semibold text-zinc-550 px-4 pt-1.5 z-20">
+                <span>13:30</span>
+                <div className="flex items-center gap-1.5">
+                  <span>5G</span>
+                  <div className="w-4 h-2 rounded-sm border border-zinc-500 flex items-center p-[1px]">
+                    <div className="w-full h-full bg-cyan-400 rounded-sm" />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {[
-                  { title: "Next.js 16", desc: "React layout engine", icon: Code, color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
-                  { title: "Agora SDK", desc: "Sub-second RTC Voice", icon: MessageSquare, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-                  { title: "OpenAI GPT", desc: "Structured tool extraction", icon: Sparkles, color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
-                  { title: "Couchbase", desc: "Capella Real-time DB", icon: Database, color: "text-pink-400 bg-pink-500/10 border-pink-500/20" },
-                  { title: "FastAPI", desc: "Python business logic", icon: Layers, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" }
-                ].map((node, idx) => {
-                  const Icon = node.icon;
-                  return (
-                    <div key={idx} className="p-5 rounded-2xl border border-white/[0.05] bg-zinc-900/30 flex flex-col items-center justify-center text-center space-y-3">
-                      <div className={`p-3 rounded-xl border ${node.color} flex items-center justify-center`}>
-                        <Icon className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="font-bold text-xs text-white">{node.title}</div>
-                        <div className="text-[9px] text-zinc-500 leading-tight">{node.desc}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* Glowing Phone Screen Borders */}
+              <div className="absolute inset-0 rounded-[42px] border border-cyan-500/10 pointer-events-none z-10" />
 
-              {/* Data pipeline architecture map */}
-              <div className="rounded-2xl border border-white/[0.05] bg-zinc-900/30 p-5 space-y-4">
-                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Sub-second Latency Pipeline Flow</span>
+              {/* Main Screen Content */}
+              <div className="flex-1 flex flex-col justify-between py-6 px-1 z-20 relative">
                 
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-zinc-400 text-center">
-                  <div className="p-3.5 rounded-xl border border-white/[0.06] bg-zinc-950/60 w-full md:w-auto">Client Microphone</div>
-                  <div className="text-zinc-600">──►</div>
-                  <div className="p-3.5 rounded-xl border border-blue-500/20 bg-blue-500/5 text-blue-400 w-full md:w-auto">Agora RTC Channels</div>
-                  <div className="text-zinc-600">──►</div>
-                  <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 w-full md:w-auto">FastAPI & OpenAI</div>
-                  <div className="text-zinc-600">──►</div>
-                  <div className="p-3.5 rounded-xl border border-pink-500/20 bg-pink-500/5 text-pink-400 w-full md:w-auto">Couchbase DB</div>
-                  <div className="text-zinc-600">──►</div>
-                  <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 w-full md:w-auto">Faye Dynamic UI</div>
+                {/* Faye Active banner */}
+                <div className="text-center space-y-1 pt-2">
+                  <span className="text-[7px] tracking-widest font-black uppercase text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full">
+                    FAYE VIRTUAL AI
+                  </span>
+                  <div className="text-[10px] font-bold text-white flex items-center justify-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    ACTIVE OUTCOME ROUTING
+                  </div>
                 </div>
+
+                {/* Concentric rotating radar circles */}
+                <div className="relative flex-1 flex items-center justify-center my-6">
+                  {/* Wave effect rings */}
+                  <div className="absolute w-36 h-36 rounded-full border border-cyan-500/10 animate-pulse-ring" style={{ animationDelay: "0s" }} />
+                  <div className="absolute w-28 h-28 rounded-full border border-cyan-500/15 animate-pulse-ring" style={{ animationDelay: "1s" }} />
+                  <div className="absolute w-20 h-20 rounded-full border border-purple-500/20 animate-pulse-ring" style={{ animationDelay: "1.5s" }} />
+                  
+                  {/* Faye Core Vector Avatar */}
+                  <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 border border-cyan-400/30 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] z-10">
+                    <span className="text-2xl font-black text-black select-none">F</span>
+                  </div>
+
+                  {/* Rotating dashed ring */}
+                  <div className="absolute w-24 h-24 rounded-full border border-dashed border-cyan-400/30 animate-rotate-radar" />
+                </div>
+
+                {/* Floating transcripts bubble inside phone */}
+                <div className="space-y-2.5 px-1 pb-4">
+                  {/* Active Transcript bubble */}
+                  <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/[0.08] shadow-lg text-[9.5px] leading-relaxed text-zinc-300 animate-float-item text-left">
+                    <span className="text-[7.5px] font-mono text-cyan-400 block uppercase mb-1">Qualifying B2B lead</span>
+                    &quot;We need to qualify and score fleet logistics leads instantly...&quot;
+                  </div>
+
+                  {/* Fired outcomes tracker */}
+                  <div className="p-2.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 text-[9px] font-mono text-cyan-400 flex items-center justify-between">
+                    <span>✓ score_lead() fired</span>
+                    <span className="font-bold bg-cyan-500 text-black px-1 rounded">HOT 🔴</span>
+                  </div>
+                </div>
+
               </div>
+
+              {/* Phone bottom indicators / waveform */}
+              <div className="w-full pb-2 z-20 flex flex-col items-center gap-2">
+                {/* Horizontal audio waveform */}
+                <div className="flex items-center gap-1 h-8 justify-center">
+                  {[0.5, 0.8, 1.2, 0.9, 0.4, 0.7, 1.1, 0.6].map((delay, idx) => (
+                    <div 
+                      key={idx}
+                      className="w-[3px] bg-gradient-to-t from-cyan-400 to-blue-500 rounded-full animate-wave-bar" 
+                      style={{ animationDelay: `${delay}s`, animationDuration: "1s" }}
+                    />
+                  ))}
+                </div>
+                {/* Home indicator bar */}
+                <div className="w-24 h-1 rounded-full bg-zinc-700" />
+              </div>
+
             </div>
-          )}
-
-          {/* ==================== TAB 7: DB EXPLORER ==================== */}
-          {activeTab === "db" && (
-            <div className="flex flex-col lg:flex-row gap-6 max-w-5xl items-start h-[calc(100vh-190px)]">
-              {/* Document Lists */}
-              <div className="w-full lg:w-[250px] shrink-0 space-y-3">
-                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Couchbase Collections</span>
-                
-                {[
-                  { id: "logistics", name: "lead::ABC_Logistics", type: "Sales Lead", color: "border-cyan-500/30 text-cyan-400" },
-                  { id: "buyer", name: "cart::Juan_Dela_Cruz", type: "Commerce Order", color: "border-purple-500/30 text-purple-400" }
-                ].map((doc) => (
-                  <button
-                    key={doc.id}
-                    type="button"
-                    onClick={() => setActiveJsonDoc(doc.id as any)}
-                    className={`w-full p-4 rounded-2xl border text-left transition-all ${
-                      activeJsonDoc === doc.id 
-                        ? "border-pink-500 bg-pink-950/15" 
-                        : "border-white/[0.05] bg-zinc-900/30 hover:bg-zinc-900/50"
-                    }`}
-                  >
-                    <span className="text-xs font-bold text-white block">{doc.name}</span>
-                    <span className="text-[9px] font-mono text-zinc-400 mt-1 block uppercase tracking-wider">{doc.type}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* JSON preview */}
-              <div className="flex-1 w-full h-full rounded-3xl border border-white/[0.06] bg-zinc-900/30 backdrop-blur-xl flex flex-col overflow-hidden">
-                <div className="bg-zinc-950/80 px-5 py-3 border-b border-white/[0.05] flex items-center justify-between shrink-0">
-                  <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">JSON Document Viewer</span>
-                  <span className="text-[9px] text-pink-400 font-bold uppercase tracking-wider bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">Capella Realtime</span>
-                </div>
-
-                <div className="flex-1 p-5 overflow-y-auto font-mono text-xs text-zinc-300 leading-relaxed text-left bg-zinc-950/20 select-all">
-                  <pre className="whitespace-pre-wrap">{activeJsonDoc === "logistics" ? logisticsJson : buyerJson}</pre>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
 
         </div>
-      </div>
+      </section>
+
+      {/* 3. AGENT CARDS SECTION */}
+      <section id="agents" className="mx-auto max-w-7xl px-6 py-24 scroll-mt-20">
+        <div className="text-center space-y-4 mb-16 reveal-item">
+          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">DEPLOYABLE MODULES</span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-sans">Choose Your Business Agent</h2>
+          <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+            Select one of our specialized agent architectures to view its outcomes, check out details, and test its capabilities.
+          </p>
+        </div>
+
+        {/* Dynamic Selector Tabs */}
+        <div className="flex justify-center mb-10 reveal-item">
+          <div className="inline-flex p-1.5 rounded-full border border-white/[0.06] bg-zinc-900/60 backdrop-blur-xl">
+            <button
+              onClick={() => {
+                setSelectedAgent("sales");
+                setAnimateKey(prev => prev + 1);
+              }}
+              className={`flex items-center gap-2 rounded-full px-6 py-3 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                selectedAgent === "sales"
+                  ? "bg-cyan-500 text-zinc-950 shadow-[0_0_20px_rgba(6,182,212,0.35)] font-black"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              B2B Sales Agent
+            </button>
+            <button
+              onClick={() => {
+                setSelectedAgent("commerce");
+                setAnimateKey(prev => prev + 1);
+              }}
+              className={`flex items-center gap-2 rounded-full px-6 py-3 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                selectedAgent === "commerce"
+                  ? "bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] font-black"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              B2C Commerce Agent
+            </button>
+          </div>
+        </div>
+
+        <div key={animateKey} className="max-w-4xl mx-auto animate-slide-top">
+          {selectedAgent === "sales" ? (
+            <AgentCard
+              type="sales"
+              title="B2B Sales Agent"
+              description="Perfect for logistics, professional services, agency campaigns, and consulting firms looking to capture, qualify, score, objection-handle, and schedule meetings."
+              badges={["B2B Service", "Lead Qualification"]}
+              targetIndustry="Logistics, Consulting, Agencies, SaaS"
+              outcomes={[
+                "Extract lead info field-by-field",
+                "Compute real-time lead score (HOT/WARM/COLD)",
+                "Identify objection types (Price, Urgent, Supplier)",
+                "Auto-draft personalized follow-up emails",
+                "Book discovery calls via live calendar slots"
+              ]}
+              deployUrl="/campaign?type=sales"
+              simulatedLogs={salesLogs}
+            />
+          ) : (
+            <AgentCard
+              type="commerce"
+              title="B2C Commerce Agent"
+              description="Built for product stores, local retailers, electronics catalogs, and retail checkouts. Guides buyers from preferences to item comparison and secure references."
+              badges={["B2C Product", "Conversational Checkout"]}
+              targetIndustry="E-commerce, Retail, Food, Electronics"
+              outcomes={[
+                "Extract buyer preferences and criteria",
+                "Live product catalogs searches",
+                "Produce side-by-side product comparisons",
+                "Verify cart and delivery addresses",
+                "Prepare checkout details and GCash references"
+              ]}
+              deployUrl="/campaign?type=commerce"
+              simulatedLogs={commerceLogs}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* 4. INTERACTIVE CALENDAR DEMO SECTION */}
+      <section id="demo-booking" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 reveal-item-slide-top">
+        <div className="text-center space-y-4 mb-16">
+          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">INTERACTIVE PREVIEW</span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">Experience the Agent Pipeline</h2>
+          <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+            Book a test demo slot using the calendar widget below. Watch how the B2B agent fires tools and generates follow-ups dynamically.
+          </p>
+        </div>
+        
+        <div className="reveal-item-slide-up">
+          <CalendarDemo />
+        </div>
+      </section>
+
+      {/* 5. WHY FFLOW.PH / COMPARISON SECTION */}
+      <section id="comparison" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-center">
+          <div className="lg:col-span-2 space-y-6 reveal-item text-left">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/5 px-3 py-1 text-xs font-semibold text-purple-400">
+              <Cpu className="w-3.5 h-3.5" />
+              Strategic Architecture
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-white font-sans">
+              Agora Powers the Voice.<br />
+              <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                FFlow.ph Powers the Outcome.
+              </span>
+            </h2>
+            <p className="text-sm text-zinc-450 leading-relaxed">
+              Agora Conversational AI Studio is an exceptional builder for voice developers. But Philippine SMEs don&apos;t need raw infrastructure—they need outcomes. We&apos;ve built the business outcome intelligence layer directly on top.
+            </p>
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 h-9 w-9 shrink-0 flex items-center justify-center border border-cyan-500/20">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Zero Developer Coding Required</h4>
+                  <p className="text-xs text-zinc-550 mt-0.5">Pick your business template, configure parameters, and launch instantly.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 h-9 w-9 shrink-0 flex items-center justify-center border border-purple-500/20">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white">Philippine Context Preloaded</h4>
+                  <p className="text-xs text-zinc-550 mt-0.5">Understands Taglish conversation, local pricing structures, and GCash checkouts.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Comparison Table */}
+          <div className="lg:col-span-3 rounded-3xl border border-white/[0.05] bg-zinc-900/40 p-6 backdrop-blur-lg overflow-hidden reveal-item">
+            <h3 className="text-lg font-bold text-white mb-4 text-left">Core Platform Differences</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/[0.05] text-zinc-500 uppercase tracking-wider text-[9px] font-bold">
+                    <th className="pb-3 font-semibold">Requirement</th>
+                    <th className="pb-3 font-semibold">Agora Studio Core</th>
+                    <th className="pb-3 font-semibold text-cyan-400">FFlow.ph Extension</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03] text-zinc-350">
+                  <tr>
+                    <td className="py-3.5 font-medium text-white">AI Capabilities</td>
+                    <td className="py-3.5 text-zinc-400">Voice prompts, Knowledge bases</td>
+                    <td className="py-3.5 text-emerald-400 font-semibold">Structured tool-calling pipeline</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 font-medium text-white">Lead Actionability</td>
+                    <td className="py-3.5 text-zinc-400">Chat histories</td>
+                    <td className="py-3.5 text-emerald-400 font-semibold">Real-time qualification scoring (HOT/WARM)</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 font-medium text-white">B2C Checkout</td>
+                    <td className="py-3.5 text-zinc-400">Manual MCP APIs</td>
+                    <td className="py-3.5 text-emerald-400 font-semibold">Dynamic preference matching + GCash ready</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 font-medium text-white">Analytics</td>
+                    <td className="py-3.5 text-zinc-400">Call durations, tokens</td>
+                    <td className="py-3.5 text-emerald-400 font-semibold">CRM Dashboard, objections, revenue tracked</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 font-medium text-white">Closing Step</td>
+                    <td className="py-3.5 text-zinc-400">Handoff or disconnect</td>
+                    <td className="py-3.5 text-emerald-400 font-semibold">Calendar invites + personalized follow-up drafts</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 p-3.5 rounded-2xl bg-zinc-950 border border-white/[0.04] text-[11px] text-zinc-400 flex items-center gap-3 text-left">
+              <Terminal className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>Agora Studio powers the voice infrastructure; FFlow.ph captures the business revenue.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. TECH STACK GRID SECTION */}
+      <section id="tech-stack" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 bg-gradient-to-b from-transparent to-zinc-950">
+        <div className="text-center space-y-4 mb-16 reveal-item">
+          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">LOCKED-IN PLATFORM STACK</span>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white font-sans">Modern Developer Infrastructure</h2>
+          <p className="text-sm text-zinc-450 max-w-md mx-auto">
+            High performance framework selections built for sub-second latency voice interactions.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-5xl mx-auto reveal-item">
+          {[
+            { name: "Next.js 16", label: "React Frontend Layout", icon: Code, color: "text-cyan-400" },
+            { name: "Agora SDK", label: "Sub-second RTC Voice", icon: MessageSquare, color: "text-blue-400" },
+            { name: "OpenAI GPT", label: "Structured Tool-Calling", icon: Sparkles, color: "text-purple-400" },
+            { name: "Couchbase", label: "Capella Real-time DB", icon: Database, color: "text-pink-400" },
+            { name: "FastAPI", label: "Python Business Logic", icon: Layers, color: "text-emerald-400" }
+          ].map((stack, idx) => {
+            const Icon = stack.icon;
+            return (
+              <div key={idx} className="p-5 rounded-2xl border border-white/[0.05] bg-zinc-900/30 flex flex-col items-center justify-center text-center space-y-2">
+                <Icon className={`w-8 h-8 ${stack.color}`} />
+                <div className="font-bold text-sm text-white">{stack.name}</div>
+                <div className="text-[10px] text-zinc-550">{stack.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 7. FOOTER */}
+      <footer className="border-t border-white/[0.05] bg-zinc-950 py-12 text-zinc-500 text-xs">
+        <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <div className="relative flex h-6 w-6 items-center justify-center rounded bg-gradient-to-tr from-cyan-500 to-blue-600 font-bold text-black text-xs">
+              F
+            </div>
+            <span className="text-sm font-semibold tracking-tight text-white font-mono">
+              FFlow.ph
+            </span>
+          </div>
+
+          <div className="font-mono text-zinc-650 uppercase tracking-widest text-[9px] text-center">
+            © 2026 FFLOW.PH. POWERED BY AGORA AUDIO INTERFACES. ALL RIGHTS RESERVED.
+          </div>
+
+          <div className="flex gap-4">
+            <Link href="/dashboard" className="hover:text-zinc-350 transition-colors">Dashboard</Link>
+            <Link href="/campaign" className="hover:text-zinc-350 transition-colors">Campaigns</Link>
+            <Link href="/leads" className="hover:text-zinc-350 transition-colors">Leads</Link>
+          </div>
+        </div>
+      </footer>
 
     </div>
   );
