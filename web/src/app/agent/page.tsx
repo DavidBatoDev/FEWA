@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
-import { Mic, MicOff, Square, X, Captions } from "lucide-react";
+import { useMemo, useRef, useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Mic, MicOff, Square, X, Captions, Terminal, Play, Settings, Sparkles, Building, ShoppingBag } from "lucide-react";
 import type { AxiosError } from "axios";
 import type {
   IAgoraRTCClient,
@@ -25,6 +26,8 @@ import type {
   AIDenoiserProcessorMode,
   IAIDenoiserProcessor,
 } from "agora-extension-ai-denoiser";
+import { FayeDashboard } from "@/components/FayeDashboard";
+
 type ConvoStartResponse = {
   agent_id: string;
   agent_name: string;
@@ -111,7 +114,16 @@ function generateDefaultUserUid(agentUidCandidate = DEFAULT_AGENT_UID) {
   return String(next);
 }
 
-export default function AgentPage() {
+function AgentPageContent() {
+  const searchParams = useSearchParams();
+  const searchType = searchParams.get("type");
+  const agentType = searchType === "commerce" || searchType === "b2c" ? "commerce" : "sales";
+  
+  // Custom navigation configurations passed from Campaign Setup
+  const queryChannel = searchParams.get("channel");
+  const queryVoice = searchParams.get("voice");
+  const queryLang = searchParams.get("lang");
+  
   const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID ?? "";
 
   const agoraRtcModuleRef = useRef<(typeof import("agora-rtc-sdk-ng")) | null>(null);
@@ -121,6 +133,7 @@ export default function AgentPage() {
   const convoApiRef = useRef<ConversationalAIAPI | null>(null);
   const aiDenoiserExtensionRef = useRef<AIDenoiserExtension | null>(null);
   const aiDenoiserProcessorRef = useRef<IAIDenoiserProcessor | null>(null);
+  
   const activeChannelRef = useRef<string>("");
   const micTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const remoteAgentAudioRef = useRef<IRemoteAudioTrack | null>(null);
@@ -137,12 +150,52 @@ export default function AgentPage() {
   const agentStateDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumePollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [channelName, setChannelName] = useState(() => generateDefaultChannelName());
+  // Simulation Refs
+  const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Real-time synchronization state refs to avoid closure stale context
+  const leadIdRef = useRef("");
+  const conversationIdRef = useRef("");
+  const agentIdRef = useRef("");
+  const agentUidRef = useRef(DEFAULT_AGENT_UID);
+  const userUidRef = useRef("");
+  const sentTurnsRef = useRef<Set<string>>(new Set());
+
+  // Input states
+  const [channelName, setChannelName] = useState(() => queryChannel || generateDefaultChannelName());
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
-  const [voice, setVoice] = useState("alloy");
+  const [voice, setVoice] = useState(() => queryVoice || "alloy");
   const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
 
+  // Sync state refs on inputs
+  useEffect(() => {
+    agentUidRef.current = agentUid;
+  }, [agentUid]);
+
+  useEffect(() => {
+    userUidRef.current = userUid;
+  }, [userUid]);
+
+  // Tab View
+  const [activeTab, setActiveTab] = useState<"faye" | "dev">("faye");
+
+  // Faye Dashboard State Sync
+  const [backendLeadProfile, setBackendLeadProfile] = useState<any>(undefined);
+  const [backendObjections, setBackendObjections] = useState<string[]>([]);
+  const [backendBuyingSignals, setBackendBuyingSignals] = useState<string[]>([]);
+  const [backendLeadScore, setBackendLeadScore] = useState(0);
+  const [backendLeadTemperature, setBackendLeadTemperature] = useState("Cold");
+  const [backendRecommendedOffer, setBackendRecommendedOffer] = useState("");
+  const [backendNextBestAction, setBackendNextBestAction] = useState("");
+
+  // Simulation states
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simStep, setSimStep] = useState(0);
+
+  // RTC Connection States
   const [agentId, setAgentId] = useState("");
+  const [leadId, setLeadId] = useState("");
+  const [conversationId, setConversationId] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -251,6 +304,49 @@ export default function AgentPage() {
       micUnmuteTimerRef.current = null;
     }
   }
+
+  // Handle RTM Transcript Updates & Sync to FastAPI DB
+  const handleRTMTranscriptSync = (items: ITranscriptHelperItem[]) => {
+    items.forEach((item) => {
+      if (item.final && !sentTurnsRef.current.has(item.id)) {
+        sentTurnsRef.current.add(item.id);
+        
+        const currentLeadId = leadIdRef.current;
+        const currentConversationId = conversationIdRef.current;
+        const currentAgentId = agentIdRef.current;
+
+        if (currentLeadId && currentConversationId && currentAgentId) {
+          api.post("/agora/convo/transcript/upsert", {
+            lead_id: currentLeadId,
+            conversation_id: currentConversationId,
+            agent_id: currentAgentId,
+            channel_name: activeChannelRef.current,
+            agent_uid: agentUidRef.current,
+            user_uid: userUidRef.current,
+            role: item.role,
+            text: item.text,
+            turn_id: item.turn_id,
+            is_final: true,
+            publisher_uid: item.uid,
+            timestamp: new Date(item.updated_at_ms).toISOString(),
+          })
+          .then((res) => {
+            // Update Faye Dashboard states with response snapshot
+            setBackendLeadProfile(res.data.lead_profile);
+            setBackendObjections(res.data.objections);
+            setBackendBuyingSignals(res.data.buying_signals);
+            setBackendLeadScore(res.data.lead_score);
+            setBackendLeadTemperature(res.data.lead_temperature);
+            setBackendRecommendedOffer(res.data.recommended_offer);
+            setBackendNextBestAction(res.data.next_best_action);
+          })
+          .catch((err) => {
+            console.error("[Faye API Sync Error]", err);
+          });
+        }
+      }
+    });
+  };
 
   function clearHalfDuplexMuteTimer() {
     if (micHalfDuplexMuteTimerRef.current) {
@@ -556,6 +652,7 @@ export default function AgentPage() {
 
   async function startSession() {
     if (isStarting || isActive) return;
+    stopSimulation(); // Stop simulation if running
 
     setErrorMessage("");
     setTranscript([]);
@@ -569,6 +666,7 @@ export default function AgentPage() {
     setRtmConnectionStatus("starting");
     setStatus("Starting Agora Conversational AI...");
     setIsStarting(true);
+    sentTurnsRef.current.clear();
 
     try {
       if (!appIdReady) {
@@ -625,6 +723,8 @@ export default function AgentPage() {
         onTranscriptUpdated: (_agentUserId, transcription) => {
           setTranscriptEventCount((prev) => prev + 1);
           setTranscript(mapToolkitTranscript(transcription.items));
+          // Sync with the backend database
+          handleRTMTranscriptSync(transcription.items);
         },
         onAgentStateChanged: (_agentUserId, event) => {
           setAgentState(event.state);
@@ -666,8 +766,16 @@ export default function AgentPage() {
         tts_voice: voice,
       });
 
-      const { agent_id, agent_uid } = startRes.data;
+      const { agent_id, agent_uid: resp_agent_uid, lead_id: resp_lead_id, conversation_id: resp_convo_id } = startRes.data;
       setAgentId(agent_id);
+      agentIdRef.current = agent_id;
+      
+      setLeadId(resp_lead_id);
+      leadIdRef.current = resp_lead_id;
+
+      setConversationId(resp_convo_id);
+      conversationIdRef.current = resp_convo_id;
+
       setStatus("Joining RTC channel...");
 
       const joinUid = Number(user_uid);
@@ -775,7 +883,6 @@ export default function AgentPage() {
       micTrackRef.current = micTrack;
       const denoiserAttached = await attachAiDenoiser(AgoraRTC, micTrack);
       if (!denoiserAttached) {
-        // Fallback to built-in suppression if AI denoiser is unavailable.
         try {
           await micTrack.setEnabled(false);
           await micTrack.setEnabled(true);
@@ -788,7 +895,7 @@ export default function AgentPage() {
       setIsActive(true);
       setStatus(`Live on "${channel_name}" as ${user_uid}. Speak to the agent.`);
       setUserUid(user_uid);
-      setAgentUid(agent_uid);
+      setAgentUid(resp_agent_uid);
       setChannelName(channel_name);
       await refreshHistoryIntoTranscript(agent_id);
     } catch (error) {
@@ -832,6 +939,13 @@ export default function AgentPage() {
 
       setStatus("Session stopped");
       setAgentId("");
+      setLeadId("");
+      setConversationId("");
+      
+      leadIdRef.current = "";
+      conversationIdRef.current = "";
+      agentIdRef.current = "";
+      
       setIsActive(false);
       setIsSpeaking(false);
       setAgentState(EAgentState.UNKNOWN);
@@ -853,33 +967,177 @@ export default function AgentPage() {
     }
   }
 
+  // Client Simulation Engine (when Agora credentials are absent or for quick sandbox walkthroughs)
+  const startSimulation = () => {
+    if (isSimulating) return;
+    setIsActive(false);
+    setIsSimulating(true);
+    setSimStep(0);
+    setTranscript([]);
+    sentTurnsRef.current.clear();
+    
+    // Clear backend states for B2B/B2C dashboards
+    setBackendLeadProfile(undefined);
+    setBackendObjections([]);
+    setBackendBuyingSignals([]);
+    setBackendLeadScore(0);
+    setBackendLeadTemperature("Cold");
+    setBackendRecommendedOffer("");
+    setBackendNextBestAction("");
+
+    let currentStep = 0;
+    const maxSteps = agentType === "sales" ? 6 : 5;
+
+    const runStep = () => {
+      currentStep++;
+      setSimStep(currentStep);
+      
+      // Update transcripts simulating client call
+      if (agentType === "sales") {
+        if (currentStep === 1) {
+          setTranscript([
+            { id: "sim-s1a", speaker: "user", text: "Hello? Hello! Is this the FFlow.ph voice agent?" },
+            { id: "sim-s1b", speaker: "assistant", text: "Hello! Yes, welcome to FFlow.ph. I'm your sales qualification agent. How can I help you today?" }
+          ]);
+        } else if (currentStep === 2) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s2a", speaker: "user", text: "Yeah, I'm calling from ABC Logistics. We've been having problems keeping track of inbound leads and manual follow-ups are taking too long." },
+            { id: "sim-s2b", speaker: "assistant", text: "I see. So you are looking to automate lead tracking for ABC Logistics to solve manual callback delays. What sector of logistics do you focus on, and how soon are you looking to fix this?" }
+          ]);
+        } else if (currentStep === 3) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s3a", speaker: "user", text: "We deal with fleet operations and supply chain management. We want to get this implemented immediately, hopefully this month." },
+            { id: "sim-s3b", speaker: "assistant", text: "Understood. Fleet operations and supply chain need quick tracking. Implementing this month is ideal. Who else is involved in approving this project budget?" }
+          ]);
+        } else if (currentStep === 4) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s4a", speaker: "user", text: "I'm the Managing Director, so I approve the budget. Speaking of budget, what are your rates? It might be too expensive for us." },
+            { id: "sim-s4b", speaker: "assistant", text: "Got it. As the Managing Director, you have direct approval. Regarding rates, our packages start at basic tiers. I understand pricing concerns, but we can verify the ROI by saving hours of manual labor per rep." }
+          ]);
+        } else if (currentStep === 5) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s5a", speaker: "user", text: "That makes sense. Can we schedule a quick call to check the demo?" },
+            { id: "sim-s5b", speaker: "assistant", text: "Absolutely! I recommend our Sales Automation Package. We can book a short discovery demo. How does tomorrow, May 28 at 2:00 PM sound?" }
+          ]);
+        } else if (currentStep === 6) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s6a", speaker: "user", text: "Yes, May 28 at 2 PM works for me. Please send the meeting link." },
+            { id: "sim-s6b", speaker: "assistant", text: "Perfect! I've booked your slot for May 28 at 2:00 PM. I'm drafting a calendar invite and proposal summary for ABC Logistics now. Talk to you soon!" }
+          ]);
+        }
+      } else {
+        // Commerce simulation script
+        if (currentStep === 1) {
+          setTranscript([
+            { id: "sim-c1a", speaker: "user", text: "Hi, I'm looking to buy a new laptop for programming and React development. Do you have anything under 60k?" },
+            { id: "sim-c1b", speaker: "assistant", text: "Hello! I can definitely help with that. For programming and React development within a ₱60,000 budget, we have a few options. Are you looking for durability, or standard consumer builds?" }
+          ]);
+        } else if (currentStep === 2) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c2a", speaker: "user", text: "Definitely durability. I travel a lot for coding, so I want something tough." },
+            { id: "sim-c2b", speaker: "assistant", text: "Got it. I recommend the Lenovo ThinkPad E14 Gen 5, which is ₱58,999 and has Mil-spec durability, compared to the ASUS VivoBook 14 at ₱54,990 which is lighter but standard build. Do you want to go with the ThinkPad?" }
+          ]);
+        } else if (currentStep === 3) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c3a", speaker: "user", text: "Yeah, let's go with the ThinkPad. It fits my specs and budget." },
+            { id: "sim-c3b", speaker: "assistant", text: "Excellent choice! I've added the Lenovo ThinkPad E14 to your cart. Can you confirm your delivery name, address, and mobile number?" }
+          ]);
+        } else if (currentStep === 4) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c4a", speaker: "user", text: "Sure, my name is Juan dela Cruz, address is Project 4, Quezon City, phone 0917-889-1243." },
+            { id: "sim-c4b", speaker: "assistant", text: "Thank you! Name: Juan dela Cruz, address: Project 4, Quezon City verified. I'm initializing your checkout reference." }
+          ]);
+        } else if (currentStep === 5) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c5a", speaker: "user", text: "Great, how do I pay? Do you take GCash?" },
+            { id: "sim-c5b", speaker: "assistant", text: "Yes, we support GCash. I've generated a GCash scan invoice. Your reference code is WPH-2026-00142. Please complete payment to confirm your order." }
+          ]);
+        }
+      }
+
+      if (currentStep >= maxSteps) {
+        if (simTimerRef.current) clearInterval(simTimerRef.current);
+      }
+    };
+
+    runStep();
+    simTimerRef.current = setInterval(runStep, 4500);
+  };
+
+  const stopSimulation = () => {
+    if (simTimerRef.current) {
+      clearInterval(simTimerRef.current);
+      simTimerRef.current = null;
+    }
+    setIsSimulating(false);
+    setSimStep(0);
+    setTranscript([]);
+  };
+
   return (
     <div className="dark h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
-      {/* LEFT SIDE: Globe & Action Button */}
-      <div className="relative w-full md:w-1/2 h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/20">
-        <div className="absolute inset-0 w-full h-full pointer-events-none opacity-90 flex items-center justify-center">
-          <GlobeAnimation isSpeaking={isSpeaking} />
+      
+      {/* LEFT COLUMN: Sphere Animation & Control Panel */}
+      <div className="relative w-full md:w-[40%] h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/10 bg-zinc-950">
+        
+        {/* Glow Header Brand */}
+        <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 font-bold text-black text-xs">F</div>
+          <span className="text-xs font-black tracking-widest text-white uppercase">
+            FFlow<span className="text-cyan-400">.ph</span>
+          </span>
+        </div>
+
+        {/* Ambient sphere animation */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none opacity-80 flex items-center justify-center">
+          <GlobeAnimation isSpeaking={isSpeaking || isSimulating} />
         </div>
         
         {/* Bottom Control Bar */}
-        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-3">
-          {!isActive ? (
-            <button
-              type="button"
-              onClick={startSession}
-              disabled={isStarting}
-              className="rounded-full bg-cyan-500 hover:bg-cyan-400 px-8 py-4 text-lg font-bold text-black transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.7)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isStarting ? "Connecting..." : "Initialize Session"}
-            </button>
+        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-4 w-[85%]">
+          {!isActive && !isSimulating ? (
+            <div className="flex flex-col gap-3.5 w-full items-center">
+              <button
+                type="button"
+                onClick={startSession}
+                disabled={isStarting}
+                className={`rounded-full px-8 py-3.5 text-sm font-bold text-black transition-all disabled:opacity-60 flex items-center gap-2 ${
+                  agentType === "sales"
+                    ? "bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]"
+                    : "bg-purple-400 hover:bg-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)]"
+                }`}
+              >
+                {isStarting ? "Connecting Agora..." : "Initialize Real-time Agent"}
+              </button>
+
+              <button
+                type="button"
+                onClick={startSimulation}
+                className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-6 py-2.5 text-xs font-semibold text-zinc-300 transition-all flex items-center gap-1.5"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                Simulate Call Pipeline
+              </button>
+            </div>
           ) : (
             <>
               {/* Status label */}
-              <p className="text-sm font-medium text-white/70 flex items-center gap-2">
-                {isSpeaking ? (
-                  <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" />Speak or click button to interrupt agent</>
+              <p className="text-xs font-semibold tracking-wide text-zinc-400 flex items-center gap-2 bg-zinc-900/60 px-3 py-1.5 rounded-full border border-white/[0.05]">
+                {isSimulating ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />Simulation Playback Step {simStep}</>
+                ) : isSpeaking ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />Agent is speaking...</>
                 ) : (
-                  "Listening..."
+                  <><span className="inline-block w-2 h-2 rounded-full bg-zinc-600 animate-ping" />Listening to Client...</>
                 )}
               </p>
 
@@ -889,29 +1147,31 @@ export default function AgentPage() {
                 <button
                   type="button"
                   onClick={() => setShowTranscript((v) => !v)}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showTranscript ? "bg-white/20 text-white" : "bg-white/10 text-white/40"}`}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all border ${
+                    showTranscript 
+                      ? "bg-white/10 text-white border-white/20" 
+                      : "bg-white/[0.02] text-white/30 border-white/[0.04]"
+                  }`}
                   title="Toggle subtitles"
                 >
-                  <Captions className="w-5 h-5" />
+                  <Captions className="w-4.5 h-4.5" />
                 </button>
 
                 {/* Center: mic + wave OR mic + stop */}
-                <div className="flex items-center gap-2 bg-white/10 rounded-full px-5 py-3">
-                  {/* Mic / mute button */}
+                <div className="flex items-center gap-2 bg-white/[0.05] border border-white/[0.07] rounded-full px-4 py-2.5">
                   <button
                     type="button"
                     onClick={toggleMicMute}
-                    className="text-white/80 hover:text-white transition-colors"
+                    disabled={isSimulating}
+                    className="text-white/80 hover:text-white transition-colors disabled:opacity-30"
                     title={isMicMuted ? "Unmute mic" : "Mute mic"}
                   >
-                    {isMicMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5" />}
+                    {isMicMuted ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4" />}
                   </button>
 
-                  {/* Divider */}
-                  <div className="w-px h-5 bg-white/20" />
+                  <div className="w-px h-4 bg-white/20" />
 
-                  {/* Wave bars when user speaking, animated dots otherwise, stop when AI speaking */}
-                  {isSpeaking ? (
+                  {isSpeaking && !isSimulating ? (
                     <button
                       type="button"
                       onClick={interruptAgent}
@@ -919,45 +1179,42 @@ export default function AgentPage() {
                       className="text-white hover:text-red-300 transition-colors disabled:opacity-50"
                       title="Stop agent"
                     >
-                      <Square className="w-4 h-4 fill-current" />
+                      <Square className="w-3.5 h-3.5 fill-current" />
                     </button>
-                  ) : micVolumeLevel > 0.02 ? (
-                    /* Audio wave bars */
-                    <div className="flex items-center gap-[3px] h-5">
+                  ) : micVolumeLevel > 0.02 && !isSimulating ? (
+                    <div className="flex items-center gap-[3px] h-4">
                       {[0.6, 1, 0.7, 0.9, 0.5].map((base, i) => (
                         <div
                           key={i}
-                          className="w-[3px] rounded-full bg-cyan-400"
+                          className="w-[2.5px] rounded-full bg-cyan-400"
                           style={{
-                            height: `${Math.max(4, Math.min(20, micVolumeLevel * 100 * base))}px`,
+                            height: `${Math.max(3, Math.min(16, micVolumeLevel * 100 * base))}px`,
                             transition: "height 80ms ease",
                           }}
                         />
                       ))}
                     </div>
                   ) : (
-                    /* Idle dots */
                     <div className="flex items-center gap-1">
                       {[0, 1, 2, 3].map((i) => (
                         <div
                           key={i}
-                          className="w-[6px] h-[6px] rounded-full bg-cyan-400 animate-bounce"
-                          style={{ animationDelay: `${i * 0.15}s`, animationDuration: "1s" }}
+                          className={`w-1.5 h-1.5 rounded-full ${agentType === "sales" ? "bg-cyan-400" : "bg-purple-400"} animate-bounce`}
+                          style={{ animationDelay: `${i * 0.12}s`, animationDuration: "1s" }}
                         />
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* X — terminate */}
+                {/* Terminate */}
                 <button
                   type="button"
-                  onClick={stopSession}
-                  disabled={isStopping}
-                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-all disabled:opacity-50"
-                  title="Terminate session"
+                  onClick={isSimulating ? stopSimulation : stopSession}
+                  className="w-11 h-11 rounded-full bg-red-950/20 hover:bg-red-500/30 border border-red-500/20 flex items-center justify-center transition-all"
+                  title="Terminate Session"
                 >
-                  <X className="w-5 h-5 text-red-400" />
+                  <X className="w-4.5 h-4.5 text-red-400" />
                 </button>
               </div>
             </>
@@ -965,147 +1222,227 @@ export default function AgentPage() {
         </div>
       </div>
 
-      {/* RIGHT SIDE: Controls, Stats & Conversation */}
-      <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto gap-6 bg-card/30">
-        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex justify-between items-center">
-          FEWA CAE System
-        </h1>
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Status & Metrics */}
-          <div className="rounded-xl border bg-background/50 p-4 text-xs flex flex-col gap-2 overflow-hidden">
-             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">System Status</h2>
-             <div className="grid grid-cols-2 gap-2">
-               <div><span className="text-muted-foreground">Status:</span> <span className="font-medium text-cyan-400">{status}</span></div>
-               <div><span className="text-muted-foreground">App ID:</span> {appIdReady ? "Configured" : "Missing"}</div>
-               <div><span className="text-muted-foreground">Agent ID:</span> {agentId || "-"}</div>
-               <div><span className="text-muted-foreground">Remote Joins:</span> {remoteJoinCount}</div>
-               <div><span className="text-muted-foreground">RTM Status:</span> {rtmConnectionStatus}</div>
-               <div><span className="text-muted-foreground">Agent State:</span> {agentState}</div>
-               <div><span className="text-muted-foreground">Transcript Evts:</span> {transcriptEventCount}</div>
-               <div><span className="text-muted-foreground">Metrics:</span> {agentMetricsCount}</div>
-               <div><span className="text-muted-foreground">Audio Proc:</span> {audioProcessingMode}</div>
-               <div><span className="text-muted-foreground">Mem Msgs:</span> {memoryMessageCount}</div>
-              </div>
-             {lastAgentError && <p className="text-amber-500 mt-2">Last agent error: {lastAgentError}</p>}
-             {errorMessage && <p className="text-red-500 mt-2">{errorMessage}</p>}
-           </div>
-
-          {/* Setup / Configuration */}
-          <div className="rounded-xl border bg-background/50 p-4 flex flex-col gap-3">
-             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Configuration</h2>
-             
-             <div className="grid grid-cols-2 gap-2 text-xs">
-               <div>
-                  <label className="text-muted-foreground mb-1 block">Channel</label>
-                  <input
-                    value={channelName}
-                    onChange={(event) => setChannelName(event.target.value)}
-                    disabled={isActive || isStarting}
-                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                  />
-               </div>
-               <div>
-                  <label className="text-muted-foreground mb-1 block">Voice</label>
-                  <select
-                    value={voice}
-                    onChange={(event) => setVoice(event.target.value)}
-                    disabled={isActive || isStarting}
-                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                  >
-                    {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
-                  </select>
-               </div>
-               <div>
-                  <label className="text-muted-foreground mb-1 block">User UID</label>
-                  <input
-                    value={userUid}
-                    onChange={(event) => setUserUid(event.target.value)}
-                    disabled={isActive || isStarting}
-                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                  />
-               </div>
-               <div>
-                  <label className="text-muted-foreground mb-1 block">Agent UID</label>
-                  <input
-                    value={agentUid}
-                    onChange={(event) => setAgentUid(event.target.value)}
-                    disabled={isActive || isStarting}
-                    className="w-full rounded-md border bg-muted/50 px-2 py-1 outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                  />
-               </div>
-             </div>
-
-             <label className="inline-flex items-center gap-2 text-[10px] mt-1 text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={autoHalfDuplex}
-                  onChange={(event) => onHalfDuplexToggle(event.target.checked)}
-                  className="rounded text-cyan-500 focus:ring-cyan-500"
-                />
-                Auto half-duplex (mute mic when agent speaks)
-              </label>
+      {/* RIGHT COLUMN: Tabbed Dashboards & Transcripts */}
+      <div className="flex-1 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto gap-5 bg-zinc-950/80">
+        
+        {/* Header Tabs */}
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("faye")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "faye" 
+                  ? "bg-white/[0.06] text-white" 
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${agentType === "sales" ? "text-cyan-400" : "text-purple-400"}`} />
+              Faye Architect
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("dev")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "dev" 
+                  ? "bg-white/[0.06] text-white" 
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+              Developer View
+            </button>
           </div>
+
+          <span className="text-[10px] font-mono text-zinc-500">
+            {leadId ? `LEAD: ${leadId.slice(0, 14)}...` : "NO ACTIVE LEAD"}
+          </span>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={saveShortTermMemory}
-              disabled={isSavingMemory || !agentId}
-              className="rounded-full border border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSavingMemory ? "Saving..." : "Save Memory"}
-            </button>
-            <button
-              type="button"
-              onClick={injectSavedMemory}
-              disabled={isInjectingMemory || !agentId}
-              className="rounded-full border border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 px-4 py-2 text-xs font-semibold text-purple-400 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isInjectingMemory ? "Injecting..." : "Inject Memory"}
-            </button>
-        </div>
-
-        {/* Memory Box */}
-        {memorySummary && (
-          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-xs text-cyan-100">
-             <h2 className="font-bold uppercase tracking-wider text-cyan-400 mb-2 text-[10px]">Short-Term Memory</h2>
-             <p className="leading-relaxed">{memorySummary}</p>
+        {/* TAB CONTENT: FAYE VISUAL WORKSPACE */}
+        {activeTab === "faye" && (
+          <div className="flex flex-col gap-5 flex-1 overflow-visible">
+            <FayeDashboard 
+              type={agentType} 
+              transcript={transcript}
+              backendLeadProfile={backendLeadProfile}
+              backendObjections={backendObjections}
+              backendBuyingSignals={backendBuyingSignals}
+              backendLeadScore={backendLeadScore}
+              backendLeadTemperature={backendLeadTemperature}
+              backendRecommendedOffer={backendRecommendedOffer}
+              backendNextBestAction={backendNextBestAction}
+              simulationActive={isSimulating}
+              simulationStep={simStep}
+            />
           </div>
         )}
 
-        {/* Conversation */}
-        {showTranscript && <div className="flex-1 flex flex-col min-h-[250px] rounded-xl border bg-background/50 overflow-hidden shadow-sm">
-          <div className="bg-muted/30 p-3 border-b flex justify-between items-center">
-            <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Transcript</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
-            {transcript.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                No transcript yet. Session inactive.
-              </div>
-            ) : (
-              transcript.map((line) => (
-                <div
-                  key={line.id}
-                  className={`rounded-2xl p-4 text-sm max-w-[85%] ${
-                    line.speaker === "assistant"
-                      ? "bg-muted/80 text-foreground self-start rounded-bl-sm"
-                      : line.speaker === "user" 
-                      ? "bg-cyan-600/20 border border-cyan-500/30 text-cyan-50 self-end rounded-br-sm ml-auto"
-                      : "bg-gray-600/20 border border-gray-500/30 text-gray-300 self-center rounded-lg text-xs"
-                  }`}
-                >
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider opacity-50">{line.speaker}</p>
-                  <p className="leading-relaxed">{line.text}</p>
+        {/* TAB CONTENT: ORIGINAL SYSTEM SETUPS */}
+        {activeTab === "dev" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Status & Metrics */}
+              <div className="rounded-2xl border border-white/[0.06] bg-zinc-900/30 p-4 text-xs flex flex-col gap-2 overflow-hidden">
+                <h2 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">System Status</h2>
+                <div className="grid grid-cols-2 gap-2 text-zinc-400">
+                  <div>Status: <span className="font-semibold text-cyan-400">{status}</span></div>
+                  <div>App ID: {appIdReady ? "Configured" : "Missing"}</div>
+                  <div>Agent ID: {agentId || "-"}</div>
+                  <div>Remote Joins: {remoteJoinCount}</div>
+                  <div>RTM Status: {rtmConnectionStatus}</div>
+                  <div>Agent State: {agentState}</div>
+                  <div>Transcript Evts: {transcriptEventCount}</div>
+                  <div>Metrics Count: {agentMetricsCount}</div>
+                  <div>Audio Proc: {audioProcessingMode}</div>
+                  <div>Mem Messages: {memoryMessageCount}</div>
                 </div>
-              ))
+                {lastAgentError && <p className="text-amber-500 mt-2 font-mono">Last error: {lastAgentError}</p>}
+                {errorMessage && <p className="text-red-500 mt-2 font-mono">{errorMessage}</p>}
+              </div>
+
+              {/* Setup Configuration */}
+              <div className="rounded-2xl border border-white/[0.06] bg-zinc-900/30 p-4 flex flex-col gap-3">
+                <h2 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Manual Setup overrides</h2>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Channel</label>
+                    <input
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Voice</label>
+                    <select
+                      value={voice}
+                      onChange={(e) => setVoice(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 outline-none disabled:opacity-60"
+                    >
+                      {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">User UID</label>
+                    <input
+                      value={userUid}
+                      onChange={(e) => setUserUid(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 mb-1 block">Agent UID</label>
+                    <input
+                      value={agentUid}
+                      onChange={(e) => setAgentUid(e.target.value)}
+                      disabled={isActive || isStarting}
+                      className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 font-mono outline-none disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-[10px] mt-1 text-zinc-500">
+                  <input
+                    type="checkbox"
+                    checked={autoHalfDuplex}
+                    onChange={(e) => onHalfDuplexToggle(e.target.checked)}
+                    className="rounded text-cyan-500 focus:ring-cyan-500"
+                  />
+                  Auto half-duplex (mute mic when agent speaks)
+                </label>
+              </div>
+            </div>
+
+            {/* Action Buttons & Memory */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={saveShortTermMemory}
+                disabled={isSavingMemory || !agentId}
+                className="rounded-full border border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-400 transition-all disabled:opacity-50"
+              >
+                {isSavingMemory ? "Saving..." : "Save Memory"}
+              </button>
+              <button
+                type="button"
+                onClick={injectSavedMemory}
+                disabled={isInjectingMemory || !agentId}
+                className="rounded-full border border-purple-500/50 bg-purple-500/10 hover:bg-purple-500/20 px-4 py-2 text-xs font-semibold text-purple-400 transition-all disabled:opacity-50"
+              >
+                {isInjectingMemory ? "Injecting..." : "Inject Memory"}
+              </button>
+            </div>
+
+            {memorySummary && (
+              <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-xs text-cyan-100">
+                <h2 className="font-bold uppercase tracking-wider text-cyan-400 mb-2 text-[9px] font-mono">Short-Term Memory</h2>
+                <p className="leading-relaxed">{memorySummary}</p>
+              </div>
             )}
           </div>
-        </div>}
+        )}
+
+        {/* BOTTOM SECTION: CONVERSATION TRANSCRIPT STREAM */}
+        {showTranscript && (
+          <div className="flex-1 flex flex-col min-h-[220px] max-h-[300px] rounded-3xl border border-white/[0.06] bg-zinc-900/30 overflow-hidden shadow-sm shrink-0">
+            <div className="bg-white/[0.02] px-4 py-2.5 border-b border-white/[0.05] flex justify-between items-center shrink-0">
+              <h2 className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 font-mono">
+                <Captions className="w-3.5 h-3.5 text-cyan-400" />
+                Live Conversation Subtitles
+              </h2>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col bg-zinc-950/20">
+              {transcript.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
+                  No transcript available. Start a session or trigger a simulation playback.
+                </div>
+              ) : (
+                transcript.map((line) => (
+                  <div
+                    key={line.id}
+                    className={`rounded-2xl p-3.5 text-xs max-w-[85%] shadow-[0_5px_15px_rgba(0,0,0,0.1)] transition-all ${
+                      line.speaker === "assistant"
+                        ? "bg-zinc-900 border border-white/[0.04] text-zinc-100 self-start rounded-bl-sm"
+                        : line.speaker === "user" 
+                        ? `${
+                            agentType === "sales" 
+                              ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-50" 
+                              : "bg-purple-500/10 border-purple-500/20 text-purple-50"
+                          } border self-end rounded-br-sm ml-auto`
+                        : "bg-zinc-800/40 border border-white/[0.04] text-zinc-400 self-center rounded-lg text-[10px]"
+                    }`}
+                  >
+                    <p className="mb-1 text-[8px] font-mono font-black uppercase tracking-wider opacity-40">
+                      {line.speaker === "assistant" ? "AI Voice Agent" : line.speaker === "user" ? "Client Buyer" : "System Notification"}
+                    </p>
+                    <p className="leading-relaxed font-sans">{line.text}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
     </div>
+  );
+}
+
+export default function AgentPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-zinc-950 text-white flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
+          <span className="text-xs font-semibold text-cyan-400 tracking-widest uppercase">Loading Agent Console...</span>
+        </div>
+      </div>
+    }>
+      <AgentPageContent />
+    </Suspense>
   );
 }
