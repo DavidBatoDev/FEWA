@@ -6,13 +6,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import agent, leads, agora, campaigns, dashboard, intake_forms, products, orders
 from app.routes import llm, events
-from app.db.couchbase import reset_request_scope, set_request_scope_from_flow
+from app.routes import commerce, commerce_llm, products, orders, customers
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Workflow PH AI Sales Agent API",
+    title="FFlow PH AI Sales Agent API",
     description="Real-time AI sales agent backend for Philippine service businesses",
     version="0.1.0",
 )
@@ -35,6 +35,12 @@ app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(llm.router)
 app.include_router(events.router)
+# B2C Commerce Agent (Maya)
+app.include_router(commerce.router)
+app.include_router(commerce_llm.router)
+app.include_router(products.router)
+app.include_router(orders.router)
+app.include_router(customers.router)
 
 
 @app.middleware("http")
@@ -64,7 +70,7 @@ async def _startup():
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "Workflow PH AI Sales Agent API"}
+    return {"status": "ok", "service": "FFlow PH AI Sales Agent API"}
 
 
 @app.get("/health")

@@ -18,8 +18,8 @@ from couchbase.exceptions import DocumentExistsException
 CONNECTION_STRING = os.getenv("COUCHBASE_CONNECTION_STRING", "")
 USERNAME = os.getenv("COUCHBASE_USERNAME", "")
 PASSWORD = os.getenv("COUCHBASE_PASSWORD", "")
-BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "workflow_ph")
-SEED_SCOPES_RAW = os.getenv("COUCHBASE_SEED_SCOPES", "sales_agent,b2b,b2c")
+BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "fflow_ph")
+SCOPE_NAME = os.getenv("COUCHBASE_SCOPE", "sales_agent")
 
 NOW = datetime.now(timezone.utc).isoformat()
 

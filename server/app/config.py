@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     couchbase_connection_string: str = ""
     couchbase_username: str = ""
     couchbase_password: str = ""
-    couchbase_bucket: str = "workflow_ph"
+    couchbase_bucket: str = "fewa-workflow-ph"
     couchbase_scope: str = "sales_agent"
     couchbase_scope_b2b: str = "b2b"
     couchbase_scope_b2c: str = "b2c"

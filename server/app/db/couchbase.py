@@ -14,7 +14,14 @@ logger = logging.getLogger(__name__)
 _cluster: Cluster | None = None
 _request_context: ContextVar[dict[str, str] | None] = ContextVar("request_context", default=None)
 
-REQUIRED_COLLECTIONS = ["leads", "conversations", "follow_ups"]
+REQUIRED_COLLECTIONS = [
+    "leads",
+    "conversations",
+    "follow_ups",
+    "customers",
+    "orders",
+    "products",
+]
 
 
 def _resolve_scope_for_flow(flow: str | None) -> str:

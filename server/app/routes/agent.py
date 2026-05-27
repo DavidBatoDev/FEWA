@@ -51,18 +51,11 @@ async def start_conversation(req: StartRequest):
     try:
         lead_id, conversation_id, _, _ = create_lead_and_conversation(campaign_id=req.campaign_id)
 
-        if get_active_flow() == "b2c":
-            greeting = (
-                "Hi! I'm the Workflow PH Commerce Agent. "
-                "I can help you find the right product and guide you through checkout. "
-                "What kind of product are you looking for today?"
-            )
-        else:
-            greeting = (
-                "Hi! I'm the Workflow PH Sales Agent. "
-                "I'm here to help understand your business and find the best solution for you. "
-                "Can you tell me a little about your business and what you're looking to improve?"
-            )
+        greeting = (
+            "Hi! I'm the FFlow PH Sales Agent. "
+            "I'm here to help understand your business and find the best solution for you. "
+            "Can you tell me a little about your business and what you're looking to improve?"
+        )
 
         return {
             "lead_id": lead_id,
