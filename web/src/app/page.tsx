@@ -382,7 +382,7 @@ export default function LandingPage() {
       `}} />
 
       {/* 2. HERO SECTION */}
-      <section id="top" className="relative px-6 pt-32 pb-16 md:pt-40 flex items-center overflow-hidden">
+      <section id="top" className="relative px-6 pt-20 pb-8 md:pt-28 flex items-center overflow-hidden min-h-0">
         
         {/* Background visual components */}
         <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -393,106 +393,104 @@ export default function LandingPage() {
           <div className="absolute bottom-[8%] left-[-220px] h-[500px] w-[500px] border border-dashed border-white/[0.02] rounded-full opacity-35 animate-[spin_80s_linear_infinite_reverse]" />
         </div>
 
-        <div className="mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] items-center gap-14 pt-6">
-          
+        <div className="mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] items-center gap-8 lg:gap-12 pt-2">
+
           {/* Hero Left Content */}
-          <div className="space-y-8 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-4 py-1.5 text-xs font-bold text-cyan-400 tracking-wide uppercase">
-              <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: "6s" }} />
+          <div className="space-y-4 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-3 py-1 text-[10px] font-bold text-cyan-400 tracking-wide uppercase">
+              <Sparkles className="w-3 h-3 animate-spin" style={{ animationDuration: "6s" }} />
               Powered by Agora Conversational AI
             </div>
 
-            {/* LARGE MODE SELECTOR BOXES */}
-            <div id="mode-selector" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0 scroll-mt-32">
-              <button 
+            {/* MODE SELECTOR BOXES */}
+            <div id="mode-selector" className="grid grid-cols-2 gap-3 max-w-lg mx-auto lg:mx-0 scroll-mt-32">
+              <button
                 onClick={() => handleSetGlobalMode("b2b")}
-                className={`group relative p-6 rounded-[32px] border-2 transition-all duration-500 text-left overflow-hidden ${
-                  globalMode === 'b2b' 
-                    ? 'border-cyan-500 bg-cyan-500/5 shadow-[0_0_40px_rgba(6,182,212,0.2)] scale-[1.02] z-10' 
+                className={`group relative p-4 rounded-2xl border-2 transition-all duration-500 text-left overflow-hidden ${
+                  globalMode === 'b2b'
+                    ? 'border-cyan-500 bg-cyan-500/5 shadow-[0_0_30px_rgba(6,182,212,0.15)] scale-[1.02] z-10'
                     : 'border-white/5 bg-zinc-900/40 hover:border-white/20 opacity-60 grayscale-[0.5]'
                 }`}
               >
-                {/* Decorative glow for active state */}
                 {globalMode === 'b2b' && (
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/20 blur-2xl rounded-full" />
+                  <div className="absolute -right-4 -top-4 w-20 h-20 bg-cyan-500/20 blur-2xl rounded-full" />
                 )}
-                
-                <div className={`p-3 rounded-2xl w-fit mb-4 transition-colors duration-500 ${globalMode === 'b2b' ? 'bg-cyan-500 text-zinc-950' : 'bg-white/5 text-zinc-500'}`}>
-                  <Building className="w-6 h-6" />
+
+                <div className={`p-2 rounded-xl w-fit mb-2 transition-colors duration-500 ${globalMode === 'b2b' ? 'bg-cyan-500 text-zinc-950' : 'bg-white/5 text-zinc-500'}`}>
+                  <Building className="w-4 h-4" />
                 </div>
-                
-                <div className="space-y-1">
-                  <h3 className={`font-black text-xl tracking-tight transition-colors duration-500 ${globalMode === 'b2b' ? 'text-white' : 'text-zinc-500'}`}>
+
+                <div className="space-y-0.5">
+                  <h3 className={`font-black text-base tracking-tight transition-colors duration-500 ${globalMode === 'b2b' ? 'text-white' : 'text-zinc-500'}`}>
                     B2B Mode
                   </h3>
-                  <p className={`text-xs font-medium leading-relaxed transition-colors duration-500 ${globalMode === 'b2b' ? 'text-cyan-400/80' : 'text-zinc-600'}`}>
-                    Lead Qualification, Sales Scoring & Meeting Scheduling
+                  <p className={`text-[10px] font-medium leading-snug transition-colors duration-500 ${globalMode === 'b2b' ? 'text-cyan-400/80' : 'text-zinc-600'}`}>
+                    Lead Qualification, Sales Scoring & Scheduling
                   </p>
                 </div>
 
                 {globalMode === 'b2b' && (
-                  <div className="absolute bottom-4 right-6 text-cyan-500">
-                    <CheckCircle2 className="w-5 h-5" />
+                  <div className="absolute bottom-3 right-4 text-cyan-500">
+                    <CheckCircle2 className="w-4 h-4" />
                   </div>
                 )}
               </button>
 
-              <button 
+              <button
                 onClick={() => handleSetGlobalMode("b2c")}
-                className={`group relative p-6 rounded-[32px] border-2 transition-all duration-500 text-left overflow-hidden ${
-                  globalMode === 'b2c' 
-                    ? 'border-purple-500 bg-purple-500/5 shadow-[0_0_40px_rgba(168,85,247,0.2)] scale-[1.02] z-10' 
+                className={`group relative p-4 rounded-2xl border-2 transition-all duration-500 text-left overflow-hidden ${
+                  globalMode === 'b2c'
+                    ? 'border-purple-500 bg-purple-500/5 shadow-[0_0_30px_rgba(168,85,247,0.15)] scale-[1.02] z-10'
                     : 'border-white/5 bg-zinc-900/40 hover:border-white/20 opacity-60 grayscale-[0.5]'
                 }`}
               >
-                {/* Decorative glow for active state */}
                 {globalMode === 'b2c' && (
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-purple-500/20 blur-2xl rounded-full" />
+                  <div className="absolute -right-4 -top-4 w-20 h-20 bg-purple-500/20 blur-2xl rounded-full" />
                 )}
 
-                <div className={`p-3 rounded-2xl w-fit mb-4 transition-colors duration-500 ${globalMode === 'b2c' ? 'bg-purple-500 text-white' : 'bg-white/5 text-zinc-500'}`}>
-                  <ShoppingBag className="w-6 h-6" />
+                <div className={`p-2 rounded-xl w-fit mb-2 transition-colors duration-500 ${globalMode === 'b2c' ? 'bg-purple-500 text-white' : 'bg-white/5 text-zinc-500'}`}>
+                  <ShoppingBag className="w-4 h-4" />
                 </div>
 
-                <div className="space-y-1">
-                  <h3 className={`font-black text-xl tracking-tight transition-colors duration-500 ${globalMode === 'b2c' ? 'text-white' : 'text-zinc-500'}`}>
+                <div className="space-y-0.5">
+                  <h3 className={`font-black text-base tracking-tight transition-colors duration-500 ${globalMode === 'b2c' ? 'text-white' : 'text-zinc-500'}`}>
                     B2C Mode
                   </h3>
-                  <p className={`text-xs font-medium leading-relaxed transition-colors duration-500 ${globalMode === 'b2c' ? 'text-purple-400/80' : 'text-zinc-600'}`}>
-                    E-commerce Store, GCash Checkouts & Product Search
+                  <p className={`text-[10px] font-medium leading-snug transition-colors duration-500 ${globalMode === 'b2c' ? 'text-purple-400/80' : 'text-zinc-600'}`}>
+                    E-commerce, GCash Checkouts & Product Search
                   </p>
                 </div>
 
                 {globalMode === 'b2c' && (
-                  <div className="absolute bottom-4 right-6 text-purple-500">
-                    <CheckCircle2 className="w-5 h-5" />
+                  <div className="absolute bottom-3 right-4 text-purple-500">
+                    <CheckCircle2 className="w-4 h-4" />
                   </div>
                 )}
               </button>
             </div>
-            
-            <div className="space-y-6">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
+
+            <div className="space-y-3">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1] text-white">
                 {globalMode === "b2b" ? (
                   <>
                     Turn Voice Into{" "}
-                    <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent block mt-2">
+                    <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent block mt-1">
                       Business Outcomes
                     </span>
                   </>
                 ) : (
                   <>
                     Scale Your Sales With{" "}
-                    <span className="bg-gradient-to-r from-purple-400 via-pink-500 to-cyan-500 bg-clip-text text-transparent block mt-2">
+                    <span className="bg-gradient-to-r from-purple-400 via-pink-500 to-cyan-500 bg-clip-text text-transparent block mt-1">
                       Voice Commerce
                     </span>
                   </>
                 )}
               </h1>
 
-              <p className="text-base sm:text-lg text-zinc-300 max-w-2xl leading-relaxed mx-auto lg:mx-0">
+              <p className="text-sm sm:text-base text-zinc-300 max-w-xl leading-relaxed mx-auto lg:mx-0">
                 {globalMode === "b2b" ? (
-                  "Capture and qualify leads 24/7. Our B2B agents score prospects, handle objections, and book discovery calls directly into your calendar without human intervention."
+                  "Capture and qualify leads 24/7. Our B2B agents score prospects, handle objections, and book discovery calls without human intervention."
                 ) : (
                   "Let your customers shop via natural voice. Our B2C agents guide buyers through your catalog, compare items, and prepare secure GCash-ready checkout references."
                 )}
@@ -505,31 +503,23 @@ export default function LandingPage() {
                 className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
               >
                 <span>{globalMode === 'b2b' ? 'View B2B Agents' : 'View B2C Agents'}</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
                 href="/dashboard"
-                className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+                className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-6 py-3 text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
               >
-                <BarChart3 className={`w-5 h-5 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
+                <BarChart3 className={`w-4 h-4 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
                 <span>View Dashboard</span>
               </Link>
-            </div>
-
-            <div className="pt-8 border-t border-white/[0.05] max-w-lg mx-auto lg:mx-0 text-left">
-              <p className={`text-sm font-medium leading-relaxed italic ${globalMode === 'b2b' ? 'text-cyan-400/90' : 'text-purple-400/90'}`}>
-                {globalMode === 'b2b' 
-                  ? "B2B Mode simplifies your sales funnel by instantly qualifying leads and booking meetings directly into your calendar using conversational AI."
-                  : "B2C Mode transforms your product store into a voice-enabled shop where customers can browse, compare, and pay via natural conversation."}
-              </p>
             </div>
           </div>
 
           {/* Hero Right Content: 3D rotating Desktop mockup containing AI Agent Faye */}
-          <div className="w-full flex items-center justify-center py-6" style={{ perspective: "1500px" }}>
-            <div className="relative group">
+          <div className="w-full flex items-center justify-center py-2" style={{ perspective: "1500px" }}>
+            <div className="relative group w-full max-w-[580px]">
               {/* Desktop Monitor Shell */}
-              <div className={`animate-desktop-3d w-[580px] h-[360px] rounded-[24px] border-[10px] border-zinc-800 bg-zinc-950 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(6,182,212,0.1)] relative overflow-hidden flex flex-col p-1 select-none transition-all duration-700 ${globalMode === 'b2c' ? 'shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(168,85,247,0.1)]' : ''}`}>
+              <div className={`animate-desktop-3d w-full aspect-[580/360] rounded-[24px] border-[10px] border-zinc-800 bg-zinc-950 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(6,182,212,0.1)] relative overflow-hidden flex flex-col p-1 select-none transition-all duration-700 ${globalMode === 'b2c' ? 'shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(168,85,247,0.1)]' : ''}`}>
                 
                 {/* Glowing Bezel effect */}
                 <div className={`absolute inset-0 rounded-[14px] border border-white/5 pointer-events-none z-10`} />
@@ -1021,7 +1011,7 @@ export default function LandingPage() {
                 <h4 className="text-sm font-bold text-white uppercase tracking-wider">Hackathon Velocity</h4>
                 <p className="text-[9px] text-zinc-500 leading-relaxed uppercase font-mono tracking-widest">Recommended BE Hosting</p>
                 <div className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mt-2">
-                  Render or Railway
+                  GCP
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed pt-1">
                   Selected for extreme deployment simplicity, zero-config SSL, and rapid database connection setup.

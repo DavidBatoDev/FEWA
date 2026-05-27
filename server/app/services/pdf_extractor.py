@@ -3,7 +3,6 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-import fitz
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -12,33 +11,19 @@ from app.models.lead import Lead
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """Extract text from PDF file using pymupdf."""
+    """Extract text from an uploaded file. PDF parsing is disabled; returns empty for binary files."""
     path = Path(file_path)
-    
+
     if not path.exists():
-        raise FileNotFoundError(f"PDF file not found: {file_path}")
-    
+        raise FileNotFoundError(f"File not found: {file_path}")
+
     if not path.is_file():
         raise ValueError(f"Path is not a file: {file_path}")
-    
+
     try:
-        doc = fitz.open(file_path)
-        text_parts = []
-        
-        for page in doc:
-            text = page.get_text()
-            if text.strip():
-                text_parts.append(text.strip())
-        
-        doc.close()
-        
-        if not text_parts:
-            return ""
-        
-        return "\n\n".join(text_parts)
-    
+        return path.read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
-        raise RuntimeError(f"Failed to extract text from PDF: {str(e)}")
+        raise RuntimeError(f"Failed to read file: {str(e)}")
 
 
 def _has_openai_key() -> bool:

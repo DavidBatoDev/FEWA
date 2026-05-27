@@ -54,7 +54,7 @@ export function SequenceDiagram() {
     { id: "FE", name: "Frontend", label: "Next.js + TypeScript + Tailwind + shadcn/ui", tech: "Next.js + TS", x: 100, icon: User },
     { id: "H_FE", name: "Hosting FE", label: "Vercel", tech: "Vercel", x: 300, icon: Shield },
     { id: "V", name: "Voice Pipeline", label: "Agora Conversational AI (Web SDK)", tech: "Agora SDK", x: 500, icon: Mic },
-    { id: "H_BE", name: "Hosting BE", label: "Render or Railway", tech: "Render / Railway", x: 700, icon: Server },
+    { id: "H_BE", name: "Hosting BE", label: "GCP", tech: "GCP", x: 700, icon: Server },
     { id: "BE", name: "Backend", label: "FastAPI + Python", tech: "FastAPI + Python", x: 900, icon: Cpu },
     { id: "DB", name: "Database", label: "Couchbase Capella (Free Tier)", tech: "Couchbase Capella", x: 1100, icon: Database },
     { id: "AI", name: "AI Model", label: "OpenAI API — GPT-4o mini", tech: "GPT-4o mini", x: 1300, icon: Sparkles }

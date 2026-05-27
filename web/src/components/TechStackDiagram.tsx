@@ -75,7 +75,7 @@ export function TechStackDiagram() {
     {
       id: "hosting-be",
       title: "Hosting BE",
-      spec: "Render or Railway",
+      spec: "GCP",
       category: "Deployment",
       icon: Server,
       color: "text-orange-400",

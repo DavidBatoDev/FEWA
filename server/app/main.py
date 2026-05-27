@@ -2,7 +2,7 @@ from app.logging_config import setup_logging
 setup_logging()
 
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import agent, leads, agora, campaigns, dashboard, intake_forms, products, orders
 from app.routes import llm, events
@@ -42,15 +42,6 @@ app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(customers.router)
 
-
-@app.middleware("http")
-async def route_couchbase_scope_by_flow(request: Request, call_next):
-    flow = request.headers.get("x-sales-flow") or request.query_params.get("flow")
-    token = set_request_scope_from_flow(flow)
-    try:
-        return await call_next(request)
-    finally:
-        reset_request_scope(token)
 
 
 @app.on_event("startup")

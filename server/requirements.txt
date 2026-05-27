@@ -9,4 +9,3 @@ agora-token-builder==1.0.0
 httpx==0.28.0
 python-multipart==0.0.12
 agent-server-sdk-python==1.1.0
-pymupdf==1.24.0
