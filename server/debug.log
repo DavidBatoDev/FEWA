@@ -8356,3 +8356,9 @@
 2026-05-27 16:28:45 [DEBUG] httpcore.http11 — response_closed.started
 2026-05-27 16:28:45 [DEBUG] httpcore.http11 — response_closed.complete
 2026-05-27 16:28:46 [INFO] app.services.tool_executor — Transcript saved: channel='workflow-ph-cae-zgb1ac'  total_entries=30
+2026-05-27 16:52:51 [INFO] app.main — Server started. BACKEND_PUBLIC_URL=''  CUSTOM_LLM_API_KEY_SET=False
+2026-05-27 16:52:52 [INFO] app.main — Couchbase collections ready.
+2026-05-27 16:52:55 [INFO] app.main — Server started. BACKEND_PUBLIC_URL=''  CUSTOM_LLM_API_KEY_SET=False
+2026-05-27 16:52:56 [INFO] app.main — Couchbase collections ready.
+2026-05-27 16:56:16 [INFO] app.main — Server started. BACKEND_PUBLIC_URL=''  CUSTOM_LLM_API_KEY_SET=False
+2026-05-27 16:56:18 [INFO] app.main — Couchbase collections ready.
