@@ -389,7 +389,7 @@ export default function UnifiedDashboard() {
   ];
 
   return (
-    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
       
       {/* 1. Header navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-white/[0.05] bg-zinc-950/70 backdrop-blur-md">

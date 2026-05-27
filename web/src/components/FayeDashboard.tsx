@@ -20,7 +20,8 @@ import {
   Check,
   Percent,
   Layers,
-  PhoneCall
+  PhoneCall,
+  Captions
 } from "lucide-react";
 
 interface FayeDashboardProps {
@@ -35,6 +36,7 @@ interface FayeDashboardProps {
   backendNextBestAction?: string;
   simulationActive?: boolean;
   simulationStep?: number;
+  showTranscript?: boolean;
 }
 
 export function FayeDashboard({
@@ -49,6 +51,7 @@ export function FayeDashboard({
   backendNextBestAction,
   simulationActive = false,
   simulationStep = 0,
+  showTranscript = false,
 }: FayeDashboardProps) {
   const isSales = type === "sales";
   
@@ -91,6 +94,14 @@ export function FayeDashboard({
   });
   const [checkoutStatus, setCheckoutStatus] = useState<"preferences" | "match" | "verification" | "gcash" | "paid">("preferences");
   const [gcashRef, setGcashRef] = useState("");
+
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (showTranscript && transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [transcript, showTranscript]);
 
   const addFayeLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -411,6 +422,49 @@ export function FayeDashboard({
           </span>
         </div>
       </div>
+
+      {/* 1.5. LIVE CONVERSATION SUBTITLES */}
+      {showTranscript && (
+        <div className="flex flex-col min-h-[160px] max-h-[220px] rounded-3xl border border-white/[0.06] bg-zinc-900/30 overflow-hidden shadow-sm shrink-0">
+          <div className="bg-white/[0.02] px-4 py-2.5 border-b border-white/[0.05] flex justify-between items-center shrink-0">
+            <h2 className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 font-mono">
+              <Captions className={`w-3.5 h-3.5 ${isSales ? "text-cyan-400" : "text-purple-400"}`} />
+              Live Conversation Subtitles
+            </h2>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col bg-zinc-950/20">
+            {transcript.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
+                No transcript available. Start a session or trigger a simulation playback.
+              </div>
+            ) : (
+              transcript.map((line) => (
+                <div
+                  key={line.id}
+                  className={`rounded-2xl p-3.5 text-xs max-w-[85%] shadow-[0_5px_15px_rgba(0,0,0,0.1)] transition-all ${
+                    line.speaker === "assistant"
+                      ? "bg-zinc-900 border border-white/[0.04] text-zinc-100 self-start rounded-bl-sm"
+                      : line.speaker === "user" 
+                      ? `${
+                          isSales 
+                            ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-50" 
+                            : "bg-purple-500/10 border-purple-500/20 text-purple-50"
+                        } border self-end rounded-br-sm ml-auto`
+                      : "bg-zinc-800/40 border border-white/[0.04] text-zinc-400 self-center rounded-lg text-[10px]"
+                  }`}
+                >
+                  <p className="mb-1 text-[8px] font-mono font-black uppercase tracking-wider opacity-40">
+                    {line.speaker === "assistant" ? "AI Voice Agent" : line.speaker === "user" ? "Client Buyer" : "System Notification"}
+                  </p>
+                  <p className="leading-relaxed font-sans">{line.text}</p>
+                </div>
+              ))
+            )}
+            <div ref={transcriptEndRef} />
+          </div>
+        </div>
+      )}
 
       {/* 2. DYNAMIC WORKSPACE (Sales vs Commerce) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1 overflow-visible">

@@ -14,6 +14,7 @@ import {
   Calendar,
   Sparkles
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const MOCK_LEADS = [
   {
@@ -105,7 +106,7 @@ export default function LeadsPage() {
   );
 
   return (
-    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
       
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-white/[0.05] bg-zinc-950/70 backdrop-blur-md">
@@ -121,6 +122,7 @@ export default function LeadsPage() {
           </Link>
 
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <Link 
               href="/dashboard" 
               className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-xs font-semibold text-zinc-300 hover:text-white transition-all flex items-center gap-1.5"

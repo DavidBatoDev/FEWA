@@ -21,6 +21,7 @@ import {
   Check,
   Activity
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const MOCK_PROFILES: Record<string, any> = {
   "lead-1": {
@@ -187,7 +188,7 @@ export default function LeadDetailPage() {
 
   if (!lead) {
     return (
-      <div className="dark min-h-screen bg-zinc-950 text-white flex items-center justify-center font-sans">
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center font-sans">
         <div className="text-center space-y-3">
           <Activity className="w-8 h-8 text-cyan-400 animate-spin mx-auto" />
           <p className="text-xs text-zinc-500 uppercase tracking-widest font-mono">Loading Lead Profile...</p>
@@ -200,7 +201,7 @@ export default function LeadDetailPage() {
   const emailBody = `Hi ${lead.name},\n\nThank you for speaking with FFlow.ph Conversational Agent today. We've documented your requirements regarding ${lead.company}.\n\nSpecifically, you mentioned facing challenges with: "${lead.pain_point}". Our Faye Visual Architect has recommended the "${lead.recommended_offer}" which directly automates inquiries and callback logs to address this.\n\nNext Step: ${lead.next_best_action}.\n\nBest regards,\nFFlow.ph Automation Team`;
 
   return (
-    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
       
       {/* Header navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-white/[0.05] bg-zinc-950/70 backdrop-blur-md">
@@ -214,13 +215,16 @@ export default function LeadDetailPage() {
             </span>
           </Link>
 
-          <Link 
-            href="/leads" 
-            className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-xs font-semibold text-zinc-300 hover:text-white transition-all flex items-center gap-1.5"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Directory
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link 
+              href="/leads" 
+              className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-xs font-semibold text-zinc-300 hover:text-white transition-all flex items-center gap-1.5"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Directory
+            </Link>
+          </div>
         </div>
       </header>
 

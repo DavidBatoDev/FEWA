@@ -122,7 +122,7 @@ function CampaignSetupForm() {
   }
 
   return (
-    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black">
       {/* Frosted header */}
       <header className="sticky top-0 z-50 w-full border-b border-white/[0.05] bg-zinc-950/70 backdrop-blur-md">
         <div className="mx-auto max-w-7xl flex h-16 items-center justify-between px-6">

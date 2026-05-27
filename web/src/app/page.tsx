@@ -41,6 +41,7 @@ import { FayeDashboard } from "@/components/FayeDashboard";
 import { SequenceDiagram } from "@/components/SequenceDiagram";
 import { ClassDiagram } from "@/components/ClassDiagram";
 import { TechStackDiagram } from "@/components/TechStackDiagram";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // Scroll reveal observer
 function useScrollReveal(mounted: boolean) {
@@ -186,7 +187,7 @@ export default function LandingPage() {
   if (!mounted) return null;
 
   return (
-    <div className="dark min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black scroll-smooth relative">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-cyan-500 selection:text-black scroll-smooth relative">
       
       {/* Scroll indicator bar at top (Likas AI style) */}
       <div 
@@ -272,6 +273,7 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <Link 
             href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"} 
             className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-[10px] sm:text-xs font-bold text-white transition-all flex items-center gap-1.5"
@@ -745,7 +747,7 @@ export default function LandingPage() {
                 "Auto-draft personalized follow-up emails",
                 "Book discovery calls via live calendar slots"
               ]}
-              deployUrl="/campaign?type=sales"
+              deployUrl="/agent?type=sales&channel=fewa-channel-p4negk&lang=Taglish&voice=alloy&industry=Logistics+%26+Supply+Chain&persona=Crisp+%26+Consultative&payment=GCash+Direct"
               simulatedLogs={salesLogs}
             />
           ) : (
@@ -762,7 +764,7 @@ export default function LandingPage() {
                 "Verify cart and delivery addresses",
                 "Prepare checkout details and GCash references"
               ]}
-              deployUrl="/campaign?type=commerce"
+              deployUrl="/commerce?type=commerce&channel=fewa-channel-epht1s&lang=Taglish&voice=alloy&industry=Electronics+%26+Tech+Accessories&persona=Crisp+%26+Consultative&payment=GCash+Direct"
               simulatedLogs={commerceLogs}
             />
           )}
