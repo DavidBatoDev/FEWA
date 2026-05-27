@@ -21,6 +21,8 @@ class Lead(BaseModel):
     decision_maker: Optional[str] = None
     buying_intent: Optional[str] = None
     conversation_summary: Optional[str] = None
+    follow_up_subject: Optional[str] = None
+    follow_up_body: Optional[str] = None
     objections: list[str] = []
     buying_signals: list[str] = []
     lead_score: int = 0
@@ -29,6 +31,8 @@ class Lead(BaseModel):
     score_breakdown: Optional[dict] = None
     recommended_offer: Optional[str] = None
     next_best_action: Optional[str] = None
+    is_potential_lead: bool = False
+    discovery_call_schedule: Optional[str] = None
     status: LeadStatus = "new"
     created_at: str = ""
     updated_at: str = ""

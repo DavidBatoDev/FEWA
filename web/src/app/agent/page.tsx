@@ -31,8 +31,6 @@ type ConvoStartResponse = {
   agent_uid: string;
   user_uid: string;
   channel_name: string;
-  lead_id: string;
-  conversation_id: string;
   user_token: string;
   status: string;
 };
@@ -167,7 +165,72 @@ export default function AgentPage() {
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [micVolumeLevel, setMicVolumeLevel] = useState(0);
 
+  // Sales intelligence state populated by tool events via SSE
+  type ToolLogEntry = { tool: string; timestamp: string; summary: string };
+  const [toolLog, setToolLog] = useState<ToolLogEntry[]>([]);
+  const [leadProfile, setLeadProfile] = useState<Record<string, string>>({});
+  const [leadScore, setLeadScore] = useState<number | null>(null);
+  const [leadTemperature, setLeadTemperature] = useState("");
+  const [recommendedOffer, setRecommendedOffer] = useState<{ offer_name: string; reason: string } | null>(null);
+  const [detectedObjections, setDetectedObjections] = useState<string[]>([]);
+  const [callBooking, setCallBooking] = useState<{ slot: string; confirmed: boolean } | null>(null);
+  const [followUpEmail, setFollowUpEmail] = useState<{ subject: string; body_preview: string } | null>(null);
+
+  const sseRef = useRef<EventSource | null>(null);
+
   const appIdReady = useMemo(() => appId.trim().length > 0, [appId]);
+
+  function handleToolEvent(event: { tool: string; timestamp: string; data: Record<string, unknown> }) {
+    const { tool, timestamp, data } = event;
+
+    if (tool === "extract_lead_info") {
+      setLeadProfile((prev) => ({ ...prev, ...(data as Record<string, string>) }));
+      const fields = Object.entries(data as Record<string, string>)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: fields }]);
+    } else if (tool === "score_lead") {
+      setLeadScore(data.score as number);
+      setLeadTemperature(data.temperature as string);
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: `Score: ${data.score} — ${data.temperature}` }]);
+    } else if (tool === "recommend_offer") {
+      setRecommendedOffer({ offer_name: data.offer_name as string, reason: data.reason as string });
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: data.offer_name as string }]);
+    } else if (tool === "capture_pain_point") {
+      setLeadProfile((prev) => ({ ...prev, pain_point: data.pain_point as string }));
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: data.pain_point as string }]);
+    } else if (tool === "detect_objection") {
+      setDetectedObjections((prev) => [...prev, data.objection_type as string]);
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: data.objection_type as string }]);
+    } else if (tool === "book_discovery_call") {
+      setCallBooking({ slot: data.slot as string, confirmed: data.confirmed as boolean });
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: `${data.slot}${data.confirmed ? " ✓" : ""}` }]);
+    } else if (tool === "generate_follow_up") {
+      setFollowUpEmail({ subject: data.subject as string, body_preview: data.body_preview as string });
+      setToolLog((prev) => [...prev.slice(-19), { tool, timestamp, summary: "Email draft ready" }]);
+    }
+  }
+
+  function openSse(channel: string) {
+    if (sseRef.current) sseRef.current.close();
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    const es = new EventSource(`${apiBase}/events/${encodeURIComponent(channel)}`);
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data as string);
+        if (payload.type === "connected") return;
+        handleToolEvent(payload as { tool: string; timestamp: string; data: Record<string, unknown> });
+      } catch {
+        // ignore malformed events
+      }
+    };
+    sseRef.current = es;
+  }
+
+  function closeSse() {
+    sseRef.current?.close();
+    sseRef.current = null;
+  }
 
   function formatApiError(error: unknown, fallback: string): string {
     const axiosErr = error as AxiosError<{ detail?: unknown }> | undefined;
@@ -790,6 +853,7 @@ export default function AgentPage() {
       setUserUid(user_uid);
       setAgentUid(agent_uid);
       setChannelName(channel_name);
+      openSse(channel_name);
       await refreshHistoryIntoTranscript(agent_id);
     } catch (error) {
       const message = formatApiError(error, "Failed to start session.");
@@ -830,6 +894,7 @@ export default function AgentPage() {
         });
       }
 
+      closeSse();
       setStatus("Session stopped");
       setAgentId("");
       setIsActive(false);
@@ -842,6 +907,14 @@ export default function AgentPage() {
       setAudioProcessingMode("browser-ans");
       clearMicUnmuteTimer();
       setTranscript([]);
+      setToolLog([]);
+      setLeadProfile({});
+      setLeadScore(null);
+      setLeadTemperature("");
+      setRecommendedOffer(null);
+      setDetectedObjections([]);
+      setCallBooking(null);
+      setFollowUpEmail(null);
       setChannelName(generateDefaultChannelName());
       setUserUid(generateDefaultUserUid(agentUid.trim() || DEFAULT_AGENT_UID));
     } catch (error) {
@@ -1073,6 +1146,116 @@ export default function AgentPage() {
           <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-xs text-cyan-100">
              <h2 className="font-bold uppercase tracking-wider text-cyan-400 mb-2 text-[10px]">Short-Term Memory</h2>
              <p className="leading-relaxed">{memorySummary}</p>
+          </div>
+        )}
+
+        {/* Sales Intelligence Panel — visible when tools have fired */}
+        {(leadScore !== null || Object.keys(leadProfile).length > 0 || recommendedOffer || detectedObjections.length > 0) && (
+          <div className="rounded-xl border border-cyan-500/20 bg-background/50 p-4 flex flex-col gap-4">
+            <h2 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Sales Intelligence</h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Lead Profile */}
+              {Object.keys(leadProfile).length > 0 && (
+                <div className="col-span-2 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Lead Profile</p>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    {Object.entries(leadProfile).map(([k, v]) => (
+                      <div key={k} className="flex gap-1">
+                        <span className="text-muted-foreground capitalize">{k.replace(/_/g, " ")}:</span>
+                        <span className="text-foreground font-medium truncate">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Score Meter */}
+              {leadScore !== null && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Lead Score</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          leadTemperature === "Hot" ? "bg-red-500" : leadTemperature === "Warm" ? "bg-amber-400" : "bg-blue-400"
+                        }`}
+                        style={{ width: `${leadScore}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-bold tabular-nums">{leadScore}</span>
+                  </div>
+                  <span
+                    className={`text-xs font-bold ${
+                      leadTemperature === "Hot" ? "text-red-400" : leadTemperature === "Warm" ? "text-amber-400" : "text-blue-400"
+                    }`}
+                  >
+                    {leadTemperature}
+                  </span>
+                </div>
+              )}
+
+              {/* Recommended Offer */}
+              {recommendedOffer && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recommended Offer</p>
+                  <p className="text-xs font-bold text-cyan-400">{recommendedOffer.offer_name}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{recommendedOffer.reason}</p>
+                </div>
+              )}
+
+              {/* Objections */}
+              {detectedObjections.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Objections</p>
+                  <div className="flex flex-wrap gap-1">
+                    {detectedObjections.map((obj, i) => (
+                      <span key={i} className="text-[10px] bg-red-500/20 border border-red-500/30 text-red-400 rounded-full px-2 py-0.5">
+                        {obj.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Call Booking */}
+              {callBooking && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Discovery Call</p>
+                  <p className={`text-xs font-bold ${callBooking.confirmed ? "text-green-400" : "text-amber-400"}`}>
+                    {callBooking.slot} {callBooking.confirmed ? "✓ Confirmed" : "(pending)"}
+                  </p>
+                </div>
+              )}
+
+              {/* Follow-Up Email */}
+              {followUpEmail && (
+                <div className="col-span-2 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Follow-Up Draft</p>
+                  <p className="text-xs font-bold text-cyan-300">{followUpEmail.subject}</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">{followUpEmail.body_preview}…</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tool Activity Log */}
+        {toolLog.length > 0 && (
+          <div className="rounded-xl border border-border/30 bg-background/50 overflow-hidden">
+            <div className="bg-muted/30 px-3 py-2 border-b">
+              <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tool Activity</h2>
+            </div>
+            <div className="divide-y divide-border/20">
+              {toolLog.map((entry, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-xs">
+                  <span className="text-green-400 font-mono text-[10px] shrink-0">✓</span>
+                  <span className="text-cyan-400 font-mono text-[10px] w-36 shrink-0">{entry.tool}</span>
+                  <span className="text-muted-foreground font-mono text-[10px] w-10 shrink-0">{entry.timestamp}</span>
+                  <span className="text-foreground/70 text-[10px] truncate">{entry.summary}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
