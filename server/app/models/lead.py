@@ -1,5 +1,5 @@
 from typing import Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 LeadTemperature = Literal["Hot", "Warm", "Cold"]
 LeadStatus = Literal["new", "in_progress", "qualified", "disqualified"]
@@ -26,8 +26,8 @@ class Lead(BaseModel):
     conversation_summary: Optional[str] = None
     follow_up_subject: Optional[str] = None
     follow_up_body: Optional[str] = None
-    objections: list[str] = []
-    buying_signals: list[str] = []
+    objections: list[str] = Field(default_factory=list)
+    buying_signals: list[str] = Field(default_factory=list)
     lead_score: int = 0
     lead_temperature: Optional[LeadTemperature] = None
     asked_for_proposal: Optional[bool] = False

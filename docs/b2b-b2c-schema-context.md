@@ -85,6 +85,7 @@ Fields:
 - `objections`: `string[]`
 - `buying_signals`: `string[]`
 - `tool_activity_log`: `object[]`
+- `commerce_state`: `object` (optional runtime state for B2C tool flow)
 - `created_at`, `updated_at`: ISO timestamp strings
 
 ### `follow_ups`

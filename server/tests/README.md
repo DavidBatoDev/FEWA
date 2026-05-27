@@ -32,6 +32,10 @@ This directory contains test files for the PDF extraction feature.
   - Includes unit-style mocked DB tests
   - Includes live integration tests against `http://127.0.0.1:8000` for B2B/B2C DB routes
   - Live tests create real `intake_forms`, `leads`, and `orders` records
+- **test_tool_calling_stability.py** - Tool-calling stability checks
+  - Validates sanitizer coercion for malformed extracted values
+  - Verifies graceful fallback behavior when tool handlers fail
+  - Verifies deterministic B2C 6-tool runtime sequence with order persistence
 
 ### Database Population
 - **populate_test_data.py** - Populates test data into Couchbase via API calls
@@ -80,6 +84,12 @@ uvicorn app.main:app --reload --port 8000
 # Terminal 2
 cd ..
 python -m unittest server.tests.test_db_routes_schema_contract.TestDatabaseRouteSchemaContractLiveAPI -v
+```
+
+### Run Tool-Calling Stability Tests
+```bash
+cd ..
+python -m unittest server.tests.test_tool_calling_stability -v
 ```
 
 ### Populate Test Data into Database

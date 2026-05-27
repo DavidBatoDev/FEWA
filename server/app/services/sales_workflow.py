@@ -9,6 +9,7 @@ from app.services.ai_agent import extract_lead_profile
 from app.services.lead_scorer import score_lead
 from app.services.next_best_action import update_lead_next_best_action
 from app.services.offer_recommender import recommend_offer
+from app.services.state_sanitizer import sanitize_conversation_dict, sanitize_extracted_profile, sanitize_lead_dict
 
 SALES_PROFILE_FIELDS = [
     "name",
@@ -69,7 +70,8 @@ async def refresh_sales_state_from_transcript(
     *,
     mark_in_progress: bool = True,
 ) -> tuple[Lead, Conversation]:
-    extracted = await extract_lead_profile(conversation.transcript)
+    extracted_raw = await extract_lead_profile(conversation.transcript)
+    extracted = sanitize_extracted_profile(extracted_raw)
 
     for field in SALES_PROFILE_FIELDS:
         value = extracted.get(field)
@@ -107,6 +109,8 @@ async def refresh_sales_state_from_transcript(
     ts = now_iso()
     lead.updated_at = ts
     conversation.updated_at = ts
+    lead = Lead(**sanitize_lead_dict(lead.model_dump()))
+    conversation = Conversation(**sanitize_conversation_dict(conversation.model_dump()))
     return lead, conversation
 
 
