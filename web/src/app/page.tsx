@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AgentCard } from "@/components/AgentCard";
-import { CalendarDemo } from "@/components/CalendarDemo";
 import { CommerceDemo } from "@/components/CommerceDemo";
 import { 
   Cpu, 
@@ -41,8 +40,9 @@ import { GlobeAnimation } from "@/components/GlobeAnimation";
 import { FayeDashboard } from "@/components/FayeDashboard";
 
 // Scroll reveal observer
-function useScrollReveal() {
+function useScrollReveal(mounted: boolean) {
   useEffect(() => {
+    if (!mounted) return;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -60,7 +60,7 @@ function useScrollReveal() {
     return () => {
       elements.forEach((el) => observer.unobserve(el));
     };
-  }, []);
+  }, [mounted]);
 }
 
 export default function LandingPage() {
@@ -124,7 +124,7 @@ export default function LandingPage() {
     };
   }, []);
 
-  useScrollReveal();
+  useScrollReveal(mounted);
 
   if (!mounted) return null;
 
@@ -709,10 +709,8 @@ export default function LandingPage() {
         </div>
         
         <div key={animateDemoKey} className="space-y-12">
-          {demoMode === "b2b" ? <CalendarDemo mode="b2b" /> : <CalendarDemo mode="b2c" />}
-
           {/* New Sales/Commerce Workflow Demo Section - ALWAYS VISIBLE */}
-          <div className="pt-16 border-t border-white/[0.05] text-left">
+          <div className="text-left">
             <div className="text-center space-y-4 mb-10">
               <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>System Logic Demo</span>
               <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
@@ -865,23 +863,82 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 reveal-item">
           {[
-            { name: "Frontend", label: "Next.js, TS, Tailwind, shadcn/ui", icon: Code, color: "text-cyan-400" },
+            { name: "Frontend", label: "Next.js + TypeScript + Tailwind CSS + shadcn/ui", icon: Code, color: "text-cyan-400" },
             { name: "Backend", label: "FastAPI + Python", icon: Layers, color: "text-emerald-400" },
             { name: "Database", label: "Couchbase Free Tier", icon: Database, color: "text-pink-400" },
-            { name: "AI", label: "OpenAI GPT-4o mini", icon: Sparkles, color: "text-purple-400" },
+            { name: "AI", label: "OpenAI API using GPT-4o mini", icon: Sparkles, color: "text-purple-400" },
             { name: "Voice", label: "Agora Web SDK", icon: MessageSquare, color: "text-blue-400" },
-            { name: "FE Hosting", label: "Vercel Free Tier", icon: Building, color: "text-yellow-400" },
-            { name: "BE Hosting", label: "Render / Railway", icon: ShoppingBag, color: "text-orange-400" }
+            { name: "Frontend Hosting", label: "Vercel Free Tier", icon: Building, color: "text-yellow-400" },
+            { name: "Backend Hosting", label: "Render / Railway / Fly.io / Google Cloud Run", icon: ShoppingBag, color: "text-orange-400" }
           ].map((stack, idx) => {
             const Icon = stack.icon;
             return (
-              <div key={idx} className="p-4 rounded-2xl border border-white/[0.05] bg-zinc-900/30 flex flex-col items-center justify-center text-center space-y-2 hover:bg-white/[0.05] transition-all group">
-                <Icon className={`w-6 h-6 ${stack.color} group-hover:scale-110 transition-transform`} />
-                <div className="font-bold text-[11px] text-white">{stack.name}</div>
-                <div className="text-[9px] text-zinc-550 leading-tight">{stack.label}</div>
+              <div key={idx} className="h-full flex flex-col items-center justify-between text-center p-5 rounded-2xl border border-white/[0.05] bg-zinc-900/30 hover:bg-white/[0.05] hover:border-white/[0.1] hover:shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-all duration-300 group">
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="p-2 rounded-xl bg-white/[0.02] border border-white/[0.05] group-hover:border-white/[0.1] transition-colors">
+                    <Icon className={`w-6 h-6 ${stack.color} group-hover:scale-110 transition-transform`} />
+                  </div>
+                  <div className="font-extrabold text-[10px] text-white uppercase tracking-widest">{stack.name}</div>
+                </div>
+                <div className="text-[10px] text-zinc-450 leading-relaxed font-semibold mt-3">{stack.label}</div>
               </div>
             );
           })}
+        </div>
+
+        {/* MVP Recommendations / Strategy Sub-section */}
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto reveal-item">
+          {/* Card 1: Hackathon Hosting Recommendation */}
+          <div className="relative group overflow-hidden rounded-3xl border border-white/[0.05] bg-zinc-900/20 p-8 hover:bg-zinc-900/30 hover:border-white/[0.08] transition-all">
+            {/* Ambient glow */}
+            <div className="absolute -inset-10 bg-gradient-to-r from-cyan-500/10 to-transparent blur-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Hackathon Velocity</h4>
+                <p className="text-[9px] text-zinc-500 leading-relaxed uppercase font-mono tracking-widest">Recommended BE Hosting</p>
+                <div className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mt-2">
+                  Render or Railway
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                  Selected for extreme deployment simplicity, zero-config SSL, and rapid database connection setup.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Development Priority */}
+          <div className="relative group overflow-hidden rounded-3xl border border-white/[0.05] bg-zinc-900/20 p-8 hover:bg-zinc-900/30 hover:border-white/[0.08] transition-all">
+            {/* Ambient glow */}
+            <div className="absolute -inset-10 bg-gradient-to-r from-purple-500/10 to-transparent blur-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            
+            <div className="flex items-start gap-4 relative z-10">
+              <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <Activity className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="space-y-3 w-full">
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Development Strategy</h4>
+                <p className="text-[9px] text-zinc-550 leading-relaxed uppercase font-mono tracking-widest">Priority Roadmap</p>
+                <div className="space-y-2 pt-1">
+                  {[
+                    "Build the sales workflow first",
+                    "Connect Agora voice",
+                    "Polish the demo"
+                  ].map((priority, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-500/20 border border-purple-500/30 text-[10px] font-bold text-purple-400">
+                        {index + 1}
+                      </div>
+                      <span className="text-xs text-zinc-300 font-semibold">{priority}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
