@@ -135,11 +135,11 @@ export default function AgentPage() {
   const agentStateDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumePollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [channelName, setChannelName] = useState(() => generateDefaultChannelName());
+  const [channelName, setChannelName] = useState("");
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
   const [voice, setVoice] = useState("alloy");
   const [ttsSpeed, setTtsSpeed] = useState(TTS_SPEED_DEFAULT);
-  const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
+  const [userUid, setUserUid] = useState("");
 
   const [agentId, setAgentId] = useState("");
   const [isStarting, setIsStarting] = useState(false);
@@ -436,6 +436,11 @@ export default function AgentPage() {
       // best effort
     }
   }
+
+  useEffect(() => {
+    setChannelName(generateDefaultChannelName());
+    setUserUid(generateDefaultUserUid(DEFAULT_AGENT_UID));
+  }, []);
 
   useEffect(() => {
     if (!isActive) {
