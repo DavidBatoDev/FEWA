@@ -76,10 +76,12 @@ async def refresh_sales_state_from_transcript(
             setattr(lead, field, value)
 
     asked_for_proposal = bool(extracted.get("asked_for_proposal", False))
-    score, temperature = score_lead(lead, asked_for_proposal)
+    lead.asked_for_proposal = asked_for_proposal
+    score, temperature, breakdown = score_lead(lead, asked_for_proposal)
 
     lead.lead_score = score
     lead.lead_temperature = temperature
+    lead.score_breakdown = breakdown
     lead.recommended_offer = recommend_offer(lead)
     if mark_in_progress and lead.status not in ("qualified", "disqualified"):
         lead.status = "in_progress"

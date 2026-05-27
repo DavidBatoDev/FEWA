@@ -96,12 +96,18 @@ async def score_lead_endpoint(lead_id: str):
     except Exception:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    score, temperature = score_lead(lead)
+    score, temperature, breakdown = score_lead(lead, lead.asked_for_proposal or False)
     lead.lead_score = score
     lead.lead_temperature = temperature
+    lead.score_breakdown = breakdown
     leads_col.replace(lead_id, lead.model_dump())
 
-    return {"lead_id": lead_id, "lead_score": score, "lead_temperature": temperature}
+    return {
+        "lead_id": lead_id,
+        "lead_score": score,
+        "lead_temperature": temperature,
+        "score_breakdown": breakdown,
+    }
 
 
 @router.post("/{lead_id}/recommend-offer")

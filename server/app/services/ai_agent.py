@@ -1,6 +1,7 @@
 from openai import AsyncOpenAI
 from app.config import settings
 from app.models.conversation import TranscriptEntry
+from app.models.lead import Lead, LeadTemperature
 
 SYSTEM_PROMPT = """You are Workflow PH Sales Agent, a real-time AI sales qualification agent for Philippine service businesses. You are powered by GPT-4o mini.
 
@@ -183,3 +184,108 @@ Return plain text only."""
         return summary or fallback_summary
     except Exception:
         return fallback_summary
+
+
+def compute_lead_score(lead: Lead, asked_for_proposal: bool = False) -> tuple[int, dict]:
+    breakdown = {}
+    score = 0
+
+    # 1. Clear pain point (+20)
+    if lead.pain_point and lead.pain_point.strip():
+        breakdown["pain_point"] = {"status": "Yes", "points": 20}
+        score += 20
+    else:
+        breakdown["pain_point"] = {"status": "No", "points": 0}
+
+    # 2. Urgent timeline (+20)
+    if lead.timeline and lead.timeline.strip() and lead.timeline.lower() not in ("later", "not sure", "no", "none"):
+        breakdown["timeline"] = {"status": "Yes", "points": 20}
+        score += 20
+    else:
+        breakdown["timeline"] = {"status": "No", "points": 0}
+
+    # 3. Decision maker (+20)
+    if lead.decision_maker and any(kw in lead.decision_maker.lower() for kw in ("yes", "true", "owner", "decide")):
+        breakdown["decision_maker"] = {"status": "Yes", "points": 20}
+        score += 20
+    else:
+        breakdown["decision_maker"] = {"status": "No", "points": 0}
+
+    # 4. Budget readiness (+20 or +10 partial)
+    budget_val = (lead.budget_readiness or "").lower().strip()
+    if not budget_val or budget_val in ("no", "none", "no budget", "false"):
+        breakdown["budget_readiness"] = {"status": "No", "points": 0}
+    elif any(kw in budget_val for kw in ("proposal", "open", "partial", "not sure", "depends")):
+        breakdown["budget_readiness"] = {"status": "Partial", "points": 10}
+        score += 10
+    else:
+        breakdown["budget_readiness"] = {"status": "Yes", "points": 20}
+        score += 20
+
+    # 5. Contact details (+10)
+    if lead.email or lead.phone or lead.name:
+        breakdown["contact_details"] = {"status": "Yes", "points": 10}
+        score += 10
+    else:
+        breakdown["contact_details"] = {"status": "No", "points": 0}
+
+    # 6. Asked for proposal (+10)
+    if asked_for_proposal or getattr(lead, "asked_for_proposal", False):
+        breakdown["asked_for_proposal"] = {"status": "Yes", "points": 10}
+        score += 10
+    else:
+        breakdown["asked_for_proposal"] = {"status": "No", "points": 0}
+
+    return score, breakdown
+
+
+def compute_lead_temperature(score: int) -> LeadTemperature:
+    if score >= 80:
+        return "Hot"
+    elif score >= 50:
+        return "Warm"
+    else:
+        return "Cold"
+
+
+OFFERS = [
+    {
+        "name": "Lead Capture Starter",
+        "keywords": ["no website", "no form", "basic", "start", "beginning"],
+        "pain_points": ["no leads", "no inquiries", "no online presence"],
+    },
+    {
+        "name": "Growth Campaign Package",
+        "keywords": ["more leads", "more clients", "campaign", "ads", "marketing"],
+        "pain_points": ["need more leads", "need more clients", "low inquiries"],
+    },
+    {
+        "name": "Sales Automation Package",
+        "keywords": ["follow-up", "tracking", "lost leads", "crm", "manual", "spreadsheet"],
+        "pain_points": ["losing leads", "poor tracking", "no follow-up", "manual process"],
+    },
+    {
+        "name": "Enterprise Workflow Package",
+        "keywords": ["custom", "integration", "complex", "dashboard", "enterprise", "workflow"],
+        "pain_points": ["complex process", "need integration", "custom crm"],
+    },
+]
+
+
+def recommend_offer(lead: Lead) -> str:
+    pain = (lead.pain_point or "").lower()
+    solution = (lead.current_solution or "").lower()
+    combined = f"{pain} {solution}"
+
+    scores = []
+    for offer in OFFERS:
+        score = sum(1 for kw in offer["keywords"] if kw in combined)
+        score += sum(1 for pp in offer["pain_points"] if pp in combined)
+        scores.append((score, offer["name"]))
+
+    scores.sort(reverse=True)
+
+    if scores and scores[0][0] > 0:
+        return scores[0][1]
+
+    return "Sales Automation Package"

@@ -25,6 +25,8 @@ class Lead(BaseModel):
     buying_signals: list[str] = []
     lead_score: int = 0
     lead_temperature: Optional[LeadTemperature] = None
+    asked_for_proposal: Optional[bool] = False
+    score_breakdown: Optional[dict] = None
     recommended_offer: Optional[str] = None
     next_best_action: Optional[str] = None
     status: LeadStatus = "new"
@@ -44,6 +46,8 @@ class LeadUpdate(BaseModel):
     budget_readiness: Optional[str] = None
     decision_maker: Optional[str] = None
     buying_intent: Optional[str] = None
+    asked_for_proposal: Optional[bool] = None
+    score_breakdown: Optional[dict] = None
     status: Optional[LeadStatus] = None
 
 

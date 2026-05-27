@@ -89,6 +89,7 @@ async def handle_message(req: MessageRequest):
             "lead_profile": lead.model_dump(),
             "lead_score": lead.lead_score,
             "lead_temperature": lead.lead_temperature,
+            "score_breakdown": lead.score_breakdown,
             "recommended_offer": lead.recommended_offer,
             "objections": conversation.objections,
             "buying_signals": conversation.buying_signals,
