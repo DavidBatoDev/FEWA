@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FEWA - Voice Sales Agent",
-  description: "Real-time AI sales agent for Philippine service businesses",
+  title: "FFlow.ph - AI Agent Deployment Platform",
+  description: "Real-time voice and conversational AI agent deployment for Philippine businesses",
 };
 
 export default function RootLayout({
