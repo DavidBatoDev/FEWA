@@ -274,11 +274,6 @@ async def _handle_schedule_discovery_call(
 
     lead.call_status = status
     lead.call_slot = slot_text
-    lead.next_best_action = (
-        f"Discovery call booked — {slot_text}"
-        if confirmed
-        else f"Discovery call proposed — {slot_text}"
-    )
     lead.updated_at = now
 
     return {
@@ -304,10 +299,6 @@ async def _handle_request_pricing_package(
     lead.objections = list(conversation.objections)
     lead.buying_signals = list(conversation.buying_signals)
 
-    if package_name:
-        lead.next_best_action = f"Share pricing for {package_name} and offer discovery call"
-    else:
-        lead.next_best_action = "Share pricing package details and offer discovery call"
     lead.updated_at = _now_iso()
     conversation.updated_at = _now_iso()
 
