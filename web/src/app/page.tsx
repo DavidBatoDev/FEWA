@@ -38,6 +38,9 @@ import {
 } from "lucide-react";
 import { GlobeAnimation } from "@/components/GlobeAnimation";
 import { FayeDashboard } from "@/components/FayeDashboard";
+import { SequenceDiagram } from "@/components/SequenceDiagram";
+import { ClassDiagram } from "@/components/ClassDiagram";
+import { TechStackDiagram } from "@/components/TechStackDiagram";
 
 // Scroll reveal observer
 function useScrollReveal(mounted: boolean) {
@@ -75,9 +78,13 @@ export default function LandingPage() {
 
   const [globalMode, setGlobalMode] = useState<"b2b" | "b2c">("b2b");
   const [activeSection, setActiveSection] = useState<string>("agents");
+  const [techTab, setTechTab] = useState<"flow" | "model">("flow");
 
   const handleSetGlobalMode = (mode: "b2b" | "b2c") => {
     setGlobalMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("globalMode", mode);
+    }
     setSelectedAgent(mode === "b2b" ? "sales" : "commerce");
     setDemoMode(mode);
     setAnimateKey(prev => prev + 1);
@@ -107,6 +114,14 @@ export default function LandingPage() {
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const savedMode = localStorage.getItem("globalMode") as "b2b" | "b2c" | null;
+      if (savedMode) {
+        setGlobalMode(savedMode);
+        setSelectedAgent(savedMode === "b2b" ? "sales" : "commerce");
+        setDemoMode(savedMode);
+      }
+    }
 
     const handleScroll = () => {
       // Overall scroll progress
@@ -114,6 +129,32 @@ export default function LandingPage() {
       if (totalScroll > 0) {
         setScrollProgress((window.scrollY / totalScroll) * 100);
       }
+
+      // SCROLL SPY LOGIC FOR NAVBAR HIGHLIGHTS
+      const sectionIds = ["agents", "demo-booking", "comparison", "tech-stack"];
+      let currentActive = "agents";
+      
+      if (window.scrollY < 100) {
+        currentActive = "agents";
+      } else {
+        for (const id of sectionIds) {
+          const el = document.getElementById(id);
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            // If the section top has scrolled past 1/3 of the viewport
+            if (rect.top <= window.innerHeight * 0.35) {
+              if (id === "demo-booking") {
+                currentActive = "demo";
+              } else if (id === "tech-stack") {
+                currentActive = "stack";
+              } else {
+                currentActive = id;
+              }
+            }
+          }
+        }
+      }
+      setActiveSection(currentActive);
 
       // LOCAL SCROLL LOGIC FOR DEMO (Scrollytelling)
       if (demoRef.current) {
@@ -154,7 +195,17 @@ export default function LandingPage() {
       />
 
       {/* Floating frosted-glass header navbar (Likas style) */}
-      <nav className="fixed left-1/2 top-5 z-40 w-[min(1180px,calc(100%-48px))] -translate-x-1/2 flex items-center justify-between rounded-full border border-white/5 bg-zinc-900/60 px-5 py-3.5 shadow-xl shadow-black/35 backdrop-blur-xl transition-all duration-300">
+      <nav className={`fixed left-1/2 top-5 z-40 w-[min(1180px,calc(100%-48px))] -translate-x-1/2 flex items-center justify-between rounded-full border bg-zinc-900/60 px-5 py-3.5 backdrop-blur-xl transition-all duration-500 ${
+        activeSection === 'agents'
+          ? (globalMode === 'b2b' ? 'border-cyan-500/20 shadow-[0_8px_30px_rgba(6,182,212,0.12)]' : 'border-purple-500/20 shadow-[0_8px_30px_rgba(168,85,247,0.12)]')
+          : activeSection === 'demo'
+          ? (globalMode === 'b2b' ? 'border-emerald-500/20 shadow-[0_8px_30px_rgba(16,185,129,0.12)]' : 'border-purple-500/20 shadow-[0_8px_30px_rgba(168,85,247,0.12)]')
+          : activeSection === 'comparison'
+          ? (globalMode === 'b2b' ? 'border-blue-500/20 shadow-[0_8px_30px_rgba(59,130,246,0.12)]' : 'border-pink-500/20 shadow-[0_8px_30px_rgba(244,63,94,0.12)]')
+          : activeSection === 'stack'
+          ? (globalMode === 'b2b' ? 'border-cyan-500/20 shadow-[0_8px_30px_rgba(6,182,212,0.12)]' : 'border-purple-500/20 shadow-[0_8px_30px_rgba(168,85,247,0.12)]')
+          : 'border-white/5 shadow-xl shadow-black/35'
+      }`}>
         <a href="#top" className="flex items-center gap-2 group">
           <div className={`relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr ${globalMode === 'b2b' ? 'from-cyan-500 to-blue-600' : 'from-purple-500 to-indigo-600'} font-bold text-black transition-transform duration-300 group-hover:scale-105`}>
             F
@@ -167,30 +218,46 @@ export default function LandingPage() {
         
         <div className="hidden md:flex items-center gap-6 text-xs font-semibold text-zinc-400 tracking-wider uppercase">
           <Link 
-            href="/campaign?type=sales" 
+            href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"} 
             onClick={() => setActiveSection("agents")}
-            className={`transition-all duration-200 hover:text-white ${activeSection === 'agents' ? (globalMode === 'b2b' ? 'text-cyan-400 font-bold' : 'text-purple-400 font-bold') : ''}`}
+            className={`transition-all duration-300 hover:text-white ${
+              activeSection === 'agents'
+                ? (globalMode === 'b2b' ? 'text-cyan-400 font-black tracking-wide border-b border-cyan-400/50 pb-0.5' : 'text-purple-400 font-black tracking-wide border-b border-purple-400/50 pb-0.5')
+                : ''
+            }`}
           >
             {globalMode === 'b2b' ? 'B2B Agents' : 'B2C Agents'}
           </Link>
           <a 
             href="#demo-booking" 
             onClick={() => setActiveSection("demo")}
-            className={`transition-all duration-200 hover:text-white font-bold ${activeSection === 'demo' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+            className={`transition-all duration-300 hover:text-white ${
+              activeSection === 'demo'
+                ? (globalMode === 'b2b' ? 'text-emerald-400 font-black tracking-wide border-b border-emerald-400/50 pb-0.5' : 'text-purple-400 font-black tracking-wide border-b border-purple-400/50 pb-0.5')
+                : ''
+            }`}
           >
             {globalMode === 'b2b' ? 'Sales Demo' : 'Store Demo'}
           </a>
           <Link 
             href="/comparison" 
             onClick={() => setActiveSection("comparison")}
-            className={`transition-all duration-200 hover:text-white ${activeSection === 'comparison' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+            className={`transition-all duration-300 hover:text-white ${
+              activeSection === 'comparison'
+                ? (globalMode === 'b2b' ? 'text-blue-400 font-black tracking-wide border-b border-blue-400/50 pb-0.5' : 'text-pink-400 font-black tracking-wide border-b border-pink-400/50 pb-0.5')
+                : ''
+            }`}
           >
             Comparison
           </Link>
           <a 
             href="#tech-stack" 
             onClick={() => setActiveSection("stack")}
-            className={`transition-all duration-200 hover:text-white ${activeSection === 'stack' ? (globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400') : ''}`}
+            className={`transition-all duration-300 hover:text-white ${
+              activeSection === 'stack'
+                ? (globalMode === 'b2b' ? 'text-cyan-400 font-black tracking-wide border-b border-cyan-400/50 pb-0.5' : 'text-purple-400 font-black tracking-wide border-b border-purple-400/50 pb-0.5')
+                : ''
+            }`}
           >
             Stack
           </a>
@@ -206,7 +273,7 @@ export default function LandingPage() {
 
         <div className="flex items-center gap-3">
           <Link 
-            href="/campaign" 
+            href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"} 
             className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-[10px] sm:text-xs font-bold text-white transition-all flex items-center gap-1.5"
           >
             <Settings className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-cyan-400/70' : 'text-purple-400/70'}`} />
@@ -428,10 +495,10 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
-              <Link
-                href="/campaign?type=sales"
-                className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_24px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_24px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-6 py-3 text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
+              <Link 
+                href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"}
+                className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
               >
                 <span>{globalMode === 'b2b' ? 'View B2B Agents' : 'View B2C Agents'}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -877,39 +944,54 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 6. TECH STACK GRID SECTION */}
+      {/* 6. ORCHESTRATION PIPELINE FLOW SECTION */}
       <section id="tech-stack" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 bg-gradient-to-b from-transparent to-zinc-950">
-        <div className="text-center space-y-4 mb-16 reveal-item">
-          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">FINAL LOCKED MVP STACK</span>
-          <h2 className="text-3xl font-extrabold tracking-tight text-white font-sans">Full-Stack AI Infrastructure</h2>
-          <p className="text-sm text-zinc-450 max-w-md mx-auto">
-            High performance framework selections built for hackathon speed and sub-second latency.
+        <div className="text-center space-y-4 mb-8 reveal-item">
+          <span className={`text-xs font-bold tracking-widest uppercase ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>PIPELINE INFRASTRUCTURE & REFERENCE</span>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white font-sans">
+            {techTab === "flow" ? "Voice Orchestration Flow" : "System Configuration Models"}
+          </h2>
+          <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+            {techTab === "flow" 
+              ? "High-performance real-time communications flow mapping ASR processing, context injection, and direct control loops."
+              : "UML diagram showing configuration objects, LLM attributes, and message structure models."}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 reveal-item">
-          {[
-            { name: "Frontend", label: "Next.js + TypeScript + Tailwind CSS + shadcn/ui", icon: Code, color: "text-cyan-400" },
-            { name: "Backend", label: "FastAPI + Python", icon: Layers, color: "text-emerald-400" },
-            { name: "Database", label: "Couchbase Free Tier", icon: Database, color: "text-pink-400" },
-            { name: "AI", label: "OpenAI API using GPT-4o mini", icon: Sparkles, color: "text-purple-400" },
-            { name: "Voice", label: "Agora Web SDK", icon: MessageSquare, color: "text-blue-400" },
-            { name: "Frontend Hosting", label: "Vercel Free Tier", icon: Building, color: "text-yellow-400" },
-            { name: "Backend Hosting", label: "Render / Railway / Fly.io / Google Cloud Run", icon: ShoppingBag, color: "text-orange-400" }
-          ].map((stack, idx) => {
-            const Icon = stack.icon;
-            return (
-              <div key={idx} className="h-full flex flex-col items-center justify-between text-center p-5 rounded-2xl border border-white/[0.05] bg-zinc-900/30 hover:bg-white/[0.05] hover:border-white/[0.1] hover:shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-all duration-300 group">
-                <div className="flex flex-col items-center space-y-3">
-                  <div className="p-2 rounded-xl bg-white/[0.02] border border-white/[0.05] group-hover:border-white/[0.1] transition-colors">
-                    <Icon className={`w-6 h-6 ${stack.color} group-hover:scale-110 transition-transform`} />
-                  </div>
-                  <div className="font-extrabold text-[10px] text-white uppercase tracking-widest">{stack.name}</div>
-                </div>
-                <div className="text-[10px] text-zinc-450 leading-relaxed font-semibold mt-3">{stack.label}</div>
-              </div>
-            );
-          })}
+        {/* Tab switcher */}
+        <div className="flex justify-center mb-12 reveal-item">
+          <div className="flex p-1.5 rounded-2xl bg-zinc-950/80 border border-white/[0.05] shadow-2xl relative z-10 backdrop-blur-md animate-in fade-in duration-300">
+            <button
+              onClick={() => setTechTab("flow")}
+              className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 duration-300 relative ${
+                techTab === "flow"
+                  ? (globalMode === "b2b" ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/20" : "bg-purple-500 text-black shadow-lg shadow-purple-500/20")
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Flow Sequence
+            </button>
+            <button
+              onClick={() => setTechTab("model")}
+              className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 duration-300 relative ${
+                techTab === "model"
+                  ? (globalMode === "b2b" ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/20" : "bg-purple-500 text-black shadow-lg shadow-purple-500/20")
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              Data Models
+            </button>
+          </div>
+        </div>
+
+        <div className="reveal-item">
+          {techTab === "flow" ? <SequenceDiagram /> : <ClassDiagram />}
+        </div>
+
+        <div className="mt-16 reveal-item">
+          <TechStackDiagram />
         </div>
 
         {/* MVP Recommendations / Strategy Sub-section */}
@@ -986,7 +1068,7 @@ export default function LandingPage() {
 
           <div className="flex gap-4">
             <Link href="/dashboard" className="hover:text-zinc-350 transition-colors">Dashboard</Link>
-            <Link href="/campaign" className="hover:text-zinc-350 transition-colors">Campaigns</Link>
+            <Link href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"} className="hover:text-zinc-350 transition-colors">Campaigns</Link>
             <Link href="/leads" className="hover:text-zinc-350 transition-colors">Leads</Link>
           </div>
         </div>

@@ -6,27 +6,30 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 import httpx
 from agora_agent.agentkit.token import generate_convo_ai_token
 from agora_token_builder import RtcTokenBuilder
 from agora_token_builder.RtcTokenBuilder import Role_Publisher, Role_Subscriber
+from couchbase.exceptions import CouchbaseException, DocumentNotFoundException
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
-from app.db.couchbase import get_collection
-from app.models.lead import Lead
-from app.models.customer import Customer
+from app.db.couchbase import get_active_flow, get_collection
 from app.models.conversation import Conversation
+from app.models.customer import Customer
+from app.models.lead import Lead
 from app.services.ai_agent import SYSTEM_PROMPT
 from app.services.commerce_agent import MAYA_SYSTEM_PROMPT
-from app.services.tool_executor import register_session, unregister_session
 from app.services.commerce_tool_executor import (
     register_session as register_commerce_session,
     unregister_session as unregister_commerce_session,
 )
+from app.services.prompt_registry import get_system_prompt
+from app.services.sales_workflow import append_turn_and_refresh_sales_state, create_lead_and_conversation
+from app.services.tool_executor import register_session, unregister_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agora", tags=["agora"])
 
@@ -51,7 +54,7 @@ class TokenRequest(BaseModel):
 
 
 class ConvoStartRequest(BaseModel):
-    channel_name: str = "fflow-ph-cae"
+    channel_name: str = "workflow-ph-cae"
     user_uid: str = "1002"
     agent_uid: str = "1001"
     agent_name: str | None = None
@@ -61,20 +64,22 @@ class ConvoStartRequest(BaseModel):
     tts_speed: float | None = None
     audio_scenario: str | None = None
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
+    knowledge: str | None = None
+    flow: str | None = None
     # FFlow PH extension — selects which agent persona + tool set + custom LLM endpoint
     # the Agora session attaches to. "sales" (default, Faye/B2B) keeps existing behavior.
     agent_type: str = "sales"
 
 
 class ConvoUserTokenRequest(BaseModel):
-    channel_name: str = "fflow-ph-cae"
+    channel_name: str = "workflow-ph-cae"
     user_uid: str = "1002"
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
 
 class CaeAgentRequest(BaseModel):
     agent_id: str
-    channel_name: str = "fflow-ph-cae"
+    channel_name: str = "workflow-ph-cae"
     agent_uid: str = "1001"
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
 
@@ -110,6 +115,21 @@ class ConvoMemorySaveRequest(CaeAgentRequest):
 class ConvoMemoryInjectRequest(CaeAgentRequest):
     user_uid: str = "1002"
     system_messages: list[dict[str, str]] | None = None
+
+
+class ConvoTranscriptUpsertRequest(BaseModel):
+    lead_id: str
+    conversation_id: str
+    agent_id: str
+    channel_name: str = "workflow-ph-cae"
+    agent_uid: str = "1001"
+    user_uid: str = "1002"
+    role: str
+    text: str
+    turn_id: int | str
+    is_final: bool = True
+    publisher_uid: str | None = None
+    timestamp: str | None = None
 
 
 def _require_token_issuer_auth() -> None:
@@ -291,6 +311,29 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             detail="audio_scenario must be one of: default, chorus, aiserver",
         )
 
+    agent_type = _agent_type(req)
+    
+    # Priority 1: req.flow (from knowledge extraction)
+    # Priority 2: agent_type (from remote's commerce/sales split)
+    # Priority 3: active_flow (fallback)
+    
+    if req.flow:
+        system_prompt = get_system_prompt(req.flow)
+    else:
+        # Use remote's logic but maybe check if we want to use get_system_prompt here too
+        # For now, let's keep it consistent with remote's system_prompt_for
+        system_prompt = _system_prompt_for(agent_type)
+
+    system_messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+    
+    if req.knowledge:
+        system_messages.append({
+            "role": "system", 
+            "content": f"The following is additional business context, product catalogs, or sales guidelines for this campaign:\n\n{req.knowledge}"
+        })
+
     props = {
         "channel": _validate_channel_name(req.channel_name),
         "token": agent_token,
@@ -311,23 +354,21 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
         },
         "tts": {
             "params": {
-                "voice": req.tts_voice or ("alloy" if _agent_type(req) == "commerce" else settings.agora_convo_default_tts_voice),
+                "voice": req.tts_voice or ("alloy" if agent_type == "commerce" else settings.agora_convo_default_tts_voice),
                 "speed": max(0.25, min(4.0, req.tts_speed if req.tts_speed is not None else settings.agora_convo_default_tts_speed)),
             }
         },
         "llm": {
             **(
                 {
-                    "url": _llm_url_for(_agent_type(req), _validate_channel_name(req.channel_name)),
+                    "url": _llm_url_for(agent_type, _validate_channel_name(req.channel_name)),
                     "api_key": settings.custom_llm_api_key or "no-key",
-                    "greeting_message": _greeting_for(_agent_type(req)),
+                    "greeting_message": _greeting_for(agent_type),
                 }
                 if settings.backend_public_url
                 else {}
             ),
-            "system_messages": [
-                {"role": "system", "content": _system_prompt_for(_agent_type(req))}
-            ],
+            "system_messages": system_messages,
         },
     }
     llm_block = props["llm"]
@@ -608,6 +649,73 @@ def _normalize_system_messages(messages: list[dict[str, str]]) -> list[dict[str,
     return normalized
 
 
+def _normalize_transcript_role(role: str) -> str:
+    normalized = role.strip().lower()
+    if normalized not in {"user", "assistant"}:
+        raise HTTPException(status_code=400, detail="role must be either 'user' or 'assistant'")
+    return normalized
+
+
+def _normalize_turn_id(turn_id: int | str) -> str:
+    turn_text = str(turn_id).strip()
+    if not turn_text:
+        raise HTTPException(status_code=400, detail="turn_id is required")
+    return turn_text
+
+
+def _normalize_optional_publisher_uid(publisher_uid: str | None) -> str:
+    if not publisher_uid:
+        return ""
+    return publisher_uid.strip()
+
+
+def _build_turn_key(role: str, turn_id: str, publisher_uid: str) -> str:
+    if publisher_uid:
+        return f"{role}:{publisher_uid}:{turn_id}"
+    return f"{role}:{turn_id}"
+
+
+def _assert_matching_session_context(conversation: Conversation, req: ConvoTranscriptUpsertRequest) -> None:
+    if not conversation.session_context:
+        return
+
+    expected = {
+        "agent_id": req.agent_id.strip(),
+        "channel_name": _validate_channel_name(req.channel_name),
+        "agent_uid": _validate_uid_string(req.agent_uid, "agent_uid"),
+        "user_uid": _validate_uid_string(req.user_uid, "user_uid"),
+    }
+
+    for key, expected_value in expected.items():
+        actual = str(conversation.session_context.get(key, "")).strip()
+        if actual != expected_value:
+            raise HTTPException(status_code=400, detail=f"Session context mismatch for {key}")
+
+
+def _build_sales_snapshot(
+    lead: Lead,
+    conversation: Conversation,
+    *,
+    lead_id: str,
+    conversation_id: str,
+    deduped: bool = False,
+) -> dict[str, Any]:
+    return {
+        "accepted": not deduped,
+        "deduped": deduped,
+        "lead_id": lead_id,
+        "conversation_id": conversation_id,
+        "lead_profile": lead.model_dump(),
+        "lead_score": lead.lead_score,
+        "lead_temperature": lead.lead_temperature,
+        "recommended_offer": lead.recommended_offer,
+        "objections": list(conversation.objections),
+        "buying_signals": list(conversation.buying_signals),
+        "next_best_action": lead.next_best_action,
+        "conversation_summary": lead.conversation_summary,
+    }
+
+
 @router.post("/token")
 async def generate_token(req: TokenRequest):
     _require_token_issuer_auth()
@@ -717,7 +825,6 @@ async def start_conversational_agent(req: ConvoStartRequest):
     if agent_type == "commerce":
         customer_id = f"customer::{uuid.uuid4()}"
         try:
-            import time as _time
             customer = Customer(created_at=ts, updated_at=ts)
             conversation = Conversation(lead_id=customer_id, created_at=ts, updated_at=ts)
             for attempt in range(2):
@@ -728,7 +835,7 @@ async def start_conversational_agent(req: ConvoStartRequest):
                 except Exception as inner_exc:
                     if attempt == 0:
                         logger.warning("Couchbase commerce insert attempt 1 failed (%s), retrying…", inner_exc)
-                        _time.sleep(0.5)
+                        time.sleep(0.5)
                     else:
                         raise
             data["customer_id"] = customer_id
@@ -747,7 +854,6 @@ async def start_conversational_agent(req: ConvoStartRequest):
     # Default: B2B sales path
     lead_id = f"lead::{uuid.uuid4()}"
     try:
-        import time as _time
         lead = Lead(created_at=ts, updated_at=ts)
         conversation = Conversation(lead_id=lead_id, created_at=ts, updated_at=ts)
         for attempt in range(2):
@@ -758,7 +864,7 @@ async def start_conversational_agent(req: ConvoStartRequest):
             except Exception as inner_exc:
                 if attempt == 0:
                     logger.warning("Couchbase insert attempt 1 failed (%s), retrying…", inner_exc)
-                    _time.sleep(0.5)
+                    time.sleep(0.5)
                 else:
                     raise
         data["lead_id"] = lead_id
@@ -848,6 +954,98 @@ async def think_conversational_agent(req: CaeThinkRequest):
 async def update_conversational_agent(req: CaeUpdateRequest):
     _require_token_issuer_auth()
     return await _update_agent(req)
+
+
+@router.post("/convo/transcript/upsert")
+async def upsert_conversation_transcript(req: ConvoTranscriptUpsertRequest):
+    _require_token_issuer_auth()
+
+    lead_id = req.lead_id.strip()
+    conversation_id = req.conversation_id.strip()
+    if not lead_id:
+        raise HTTPException(status_code=400, detail="lead_id is required")
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="conversation_id is required")
+    if not req.agent_id.strip():
+        raise HTTPException(status_code=400, detail="agent_id is required")
+
+    # Validate session fields early for clearer request errors.
+    _validate_channel_name(req.channel_name)
+    _validate_uid_string(req.agent_uid, "agent_uid")
+    _validate_uid_string(req.user_uid, "user_uid")
+
+    role = _normalize_transcript_role(req.role)
+    turn_id = _normalize_turn_id(req.turn_id)
+    publisher_uid = _normalize_optional_publisher_uid(req.publisher_uid)
+    turn_key = _build_turn_key(role, turn_id, publisher_uid)
+
+    leads_col = get_collection("leads")
+    conversations_col = get_collection("conversations")
+
+    try:
+        lead_doc = leads_col.get(lead_id).content_as[dict]
+        conversation_doc = conversations_col.get(conversation_id).content_as[dict]
+        lead = Lead(**lead_doc)
+        conversation = Conversation(**conversation_doc)
+    except DocumentNotFoundException:
+        raise HTTPException(status_code=404, detail="Lead or conversation not found")
+    except CouchbaseException as exc:
+        raise HTTPException(status_code=503, detail=f"Couchbase error: {exc}") from exc
+
+    if conversation.lead_id != lead_id:
+        raise HTTPException(status_code=400, detail="Conversation does not belong to the specified lead")
+    _assert_matching_session_context(conversation, req)
+
+    if not req.is_final:
+        snapshot = _build_sales_snapshot(
+            lead,
+            conversation,
+            lead_id=lead_id,
+            conversation_id=conversation_id,
+            deduped=False,
+        )
+        snapshot["accepted"] = False
+        snapshot["reason"] = "ignored_non_final_turn"
+        return snapshot
+
+    if turn_key in conversation.processed_turn_keys:
+        snapshot = _build_sales_snapshot(
+            lead,
+            conversation,
+            lead_id=lead_id,
+            conversation_id=conversation_id,
+            deduped=True,
+        )
+        return snapshot
+
+    try:
+        lead, conversation, accepted = await append_turn_and_refresh_sales_state(
+            lead=lead,
+            conversation=conversation,
+            role=role,
+            message=req.text,
+            timestamp=req.timestamp,
+            turn_key=turn_key,
+            mark_in_progress=True,
+        )
+        if accepted:
+            leads_col.replace(lead_id, lead.model_dump())
+            conversations_col.replace(conversation_id, conversation.model_dump())
+    except CouchbaseException as exc:
+        raise HTTPException(status_code=503, detail=f"Couchbase error: {exc}") from exc
+
+    deduped = not accepted
+    snapshot = _build_sales_snapshot(
+        lead,
+        conversation,
+        lead_id=lead_id,
+        conversation_id=conversation_id,
+        deduped=deduped,
+    )
+    if not accepted:
+        snapshot["accepted"] = False
+        snapshot["reason"] = "empty_text"
+    return snapshot
 
 
 @router.post("/convo/memory/save")

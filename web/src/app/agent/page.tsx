@@ -116,10 +116,10 @@ function generateDefaultUserUid(agentUidCandidate = DEFAULT_AGENT_UID) {
   return String(next);
 }
 
-function AgentPageContent() {
+export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "commerce" }) {
   const searchParams = useSearchParams();
   const searchType = searchParams.get("type");
-  const agentType = searchType === "commerce" || searchType === "b2c" ? "commerce" : "sales";
+  const agentType = forcedType ?? (searchType === "commerce" || searchType === "b2c" ? "commerce" : "sales");
   
   // Custom navigation configurations passed from Campaign Setup
   const queryChannel = searchParams.get("channel");
@@ -762,13 +762,26 @@ function AgentPageContent() {
       await convoApi.subscribeMessage(channel_name);
 
       setStatus("Starting CAE agent...");
+      
+      // Check for campaign knowledge context
+      const knowledge = localStorage.getItem("campaign_knowledge");
+      if (knowledge) {
+        console.log("[Agent Console] Injecting campaign knowledge context...");
+      }
+
       const startRes = await api.post<ConvoStartResponse>("/agora/convo/start", {
         channel_name,
         user_uid,
         agent_uid: requestedAgentUid,
         tts_voice: voice,
         tts_speed: ttsSpeed,
+        knowledge: knowledge || undefined,
+        flow: agentType === "sales" ? "b2b" : "b2c",
+        agent_type: agentType
       });
+
+      // Clear the knowledge after starting
+      localStorage.removeItem("campaign_knowledge");
 
       const { agent_id, agent_uid: resp_agent_uid, lead_id: resp_lead_id, conversation_id: resp_convo_id } = startRes.data;
       setAgentId(agent_id);
