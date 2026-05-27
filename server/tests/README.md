@@ -28,6 +28,10 @@ This directory contains test files for the PDF extraction feature.
   - Intake form submission with PDF
   - Manual extraction endpoint
   - Lead data verification
+- **test_db_routes_schema_contract.py** - Route + schema contract checks
+  - Includes unit-style mocked DB tests
+  - Includes live integration tests against `http://127.0.0.1:8000` for B2B/B2C DB routes
+  - Live tests create real `intake_forms`, `leads`, and `orders` records
 
 ### Database Population
 - **populate_test_data.py** - Populates test data into Couchbase via API calls
@@ -65,6 +69,17 @@ cd server
 # Terminal 2: Run tests
 cd server
 .venv/bin/python tests/test_api_integration.py
+```
+
+### Run Live DB Route Contract Tests (requires server running on :8000)
+```bash
+# Terminal 1
+cd server
+uvicorn app.main:app --reload --port 8000
+
+# Terminal 2
+cd ..
+python -m unittest server.tests.test_db_routes_schema_contract.TestDatabaseRouteSchemaContractLiveAPI -v
 ```
 
 ### Populate Test Data into Database
