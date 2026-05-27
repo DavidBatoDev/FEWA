@@ -77,6 +77,7 @@ export default function LandingPage() {
   const demoRef = useRef<HTMLDivElement>(null);
 
   const [globalMode, setGlobalMode] = useState<"b2b" | "b2c">("b2b");
+  const [deployChannel, setDeployChannel] = useState("");
   const [activeSection, setActiveSection] = useState<string>("agents");
   const [techTab, setTechTab] = useState<"flow" | "model">("flow");
 
@@ -114,6 +115,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     setMounted(true);
+    setDeployChannel(`fewa-channel-${Math.random().toString(36).slice(2, 8)}`);
     if (typeof window !== "undefined") {
       const savedMode = localStorage.getItem("globalMode") as "b2b" | "b2c" | null;
       if (savedMode) {
@@ -496,19 +498,23 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
-              <Link 
-                href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"}
+              <Link
+                href={
+                  globalMode === "b2b"
+                    ? `/agent?type=sales&channel=${deployChannel}&lang=Taglish&voice=alloy&industry=sales&persona=crisp&payment=gcash`
+                    : `/commerce?type=commerce&channel=${deployChannel}&lang=Taglish&voice=alloy&industry=electronics&persona=crisp&payment=gcash`
+                }
                 className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
               >
-                <span>{globalMode === 'b2b' ? 'View B2B Agents' : 'View B2C Agents'}</span>
+                <span>Deploy to AI Console</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
-                href="/dashboard"
+                href={globalMode === "b2b" ? "/campaign?type=sales" : "/campaign?type=commerce"}
                 className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-6 py-3 text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
               >
-                <BarChart3 className={`w-4 h-4 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
-                <span>View Dashboard</span>
+                <Settings className={`w-4 h-4 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
+                <span>Configure Agent</span>
               </Link>
             </div>
           </div>
