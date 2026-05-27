@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
-import { Mic, MicOff, Square, X, Captions, User, Building2, Frown, TrendingUp, Gift, CalendarCheck, ExternalLink, AlertTriangle, Mail, Check, MoreHorizontal } from "lucide-react";
+import { useMemo, useRef, useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Mic, MicOff, Square, X, Captions, Terminal, Play, Settings, Sparkles, Building, ShoppingBag } from "lucide-react";
 import type { AxiosError } from "axios";
 import type {
   IAgoraRTCClient,
@@ -34,6 +35,8 @@ type ConvoStartResponse = {
   agent_uid: string;
   user_uid: string;
   channel_name: string;
+  lead_id: string;
+  conversation_id: string;
   user_token: string;
   status: string;
 };
@@ -64,35 +67,37 @@ type ConvoHistoryResponse = {
   message_count: number;
 };
 
+type ConvoMemorySaveResponse = {
+  ok: boolean;
+  agent_id: string;
+  channel_name: string;
+  user_uid: string;
+  message_count: number;
+  summary: string;
+  latest_key: string;
+  snapshot_key: string;
+};
 
+type ConvoMemoryInjectResponse = {
+  ok: boolean;
+  agent_id: string;
+  system_messages_count: number;
+  loaded_from_key: string;
+};
 
 type TranscriptSpeaker = "user" | "assistant" | "system";
-
-type ToolLogEntry = { tool: string; timestamp: string; summary: string; data: Record<string, unknown> };
 
 type TranscriptItem = {
   id: string;
   speaker: TranscriptSpeaker;
   text: string;
-  tools?: ToolLogEntry[];
 };
 
 const DEFAULT_AGENT_UID = "1001";
+const VOICES = ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"];
 const TTS_SPEED_DEFAULT = 1.2;
 const TTS_SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.2, 1.5, 2.0];
 const AUDIO_REPUBLISH_FLAP_WINDOW_MS = 1200;
-
-type VoiceData = { id: string; name: string; tag: string; image: string };
-const VOICE_DATA: VoiceData[] = [
-  { id: "alloy",   name: "Alloy",   tag: "Neutral",    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "ash",     name: "Ash",     tag: "Clear",      image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "ballad",  name: "Ballad",  tag: "Melodic",    image: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "coral",   name: "Coral",   tag: "Warm",       image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "echo",    name: "Echo",    tag: "Calm",       image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "sage",    name: "Sage",    tag: "Wise",       image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "shimmer", name: "Shimmer", tag: "Bright",     image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=160&h=200&fit=crop&crop=faces&auto=format" },
-  { id: "verse",   name: "Verse",   tag: "Expressive", image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=160&h=200&fit=crop&crop=faces&auto=format" },
-];
 const AI_DENOISER_ASSETS_PATH = "/external";
 const AI_DENOISER_MODE_NSNG = "NSNG" as AIDenoiserProcessorMode;
 const AI_DENOISER_LEVEL_AGGRESSIVE = "AGGRESSIVE" as AIDenoiserProcessorLevel;
@@ -112,7 +117,16 @@ function generateDefaultUserUid(agentUidCandidate = DEFAULT_AGENT_UID) {
   return String(next);
 }
 
-export default function AgentPage() {
+export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "commerce" }) {
+  const searchParams = useSearchParams();
+  const searchType = searchParams.get("type");
+  const agentType = forcedType ?? (searchType === "commerce" || searchType === "b2c" ? "commerce" : "sales");
+  
+  // Custom navigation configurations passed from Campaign Setup
+  const queryChannel = searchParams.get("channel");
+  const queryVoice = searchParams.get("voice");
+  const queryLang = searchParams.get("lang");
+  
   const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID ?? "";
 
   const agoraRtcModuleRef = useRef<(typeof import("agora-rtc-sdk-ng")) | null>(null);
@@ -122,6 +136,7 @@ export default function AgentPage() {
   const convoApiRef = useRef<ConversationalAIAPI | null>(null);
   const aiDenoiserExtensionRef = useRef<AIDenoiserExtension | null>(null);
   const aiDenoiserProcessorRef = useRef<IAIDenoiserProcessor | null>(null);
+  
   const activeChannelRef = useRef<string>("");
   const micTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
   const remoteAgentAudioRef = useRef<IRemoteAudioTrack | null>(null);
@@ -163,7 +178,35 @@ export default function AgentPage() {
     if (queryVoice) setVoice(queryVoice);
   }, [queryChannel, queryVoice]);
 
+  // Sync state refs on inputs
+  useEffect(() => {
+    agentUidRef.current = agentUid;
+  }, [agentUid]);
+
+  useEffect(() => {
+    userUidRef.current = userUid;
+  }, [userUid]);
+
+  // Tab View
+  const [activeTab, setActiveTab] = useState<"faye" | "dev">("faye");
+
+  // Faye Dashboard State Sync
+  const [backendLeadProfile, setBackendLeadProfile] = useState<any>(undefined);
+  const [backendObjections, setBackendObjections] = useState<string[]>([]);
+  const [backendBuyingSignals, setBackendBuyingSignals] = useState<string[]>([]);
+  const [backendLeadScore, setBackendLeadScore] = useState(0);
+  const [backendLeadTemperature, setBackendLeadTemperature] = useState("Cold");
+  const [backendRecommendedOffer, setBackendRecommendedOffer] = useState("");
+  const [backendNextBestAction, setBackendNextBestAction] = useState("");
+
+  // Simulation states
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simStep, setSimStep] = useState(0);
+
+  // RTC Connection States
   const [agentId, setAgentId] = useState("");
+  const [leadId, setLeadId] = useState("");
+  const [conversationId, setConversationId] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isActive, setIsActive] = useState(false);
@@ -178,253 +221,17 @@ export default function AgentPage() {
   const [lastAgentError, setLastAgentError] = useState("");
   const [autoHalfDuplex, setAutoHalfDuplex] = useState(false);
   const [isInterrupting, setIsInterrupting] = useState(false);
+  const [isSavingMemory, setIsSavingMemory] = useState(false);
+  const [isInjectingMemory, setIsInjectingMemory] = useState(false);
+  const [memorySummary, setMemorySummary] = useState("");
+  const [memoryMessageCount, setMemoryMessageCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioProcessingMode, setAudioProcessingMode] = useState("browser-ans");
   const [showTranscript, setShowTranscript] = useState(true);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [micVolumeLevel, setMicVolumeLevel] = useState(0);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-
-
-  const sseRef = useRef<EventSource | null>(null);
-  // Buffer for tools that arrive before the assistant transcript message lands.
-  const pendingToolsRef = useRef<ToolLogEntry[]>([]);
-  // Tracks the most-recently-seen assistant message ID for the current turn.
-  // Cleared when a user message arrives so late SSE events don't bleed onto
-  // the previous response.
-  const currentAssistantMsgIdRef = useRef<string>("");
 
   const appIdReady = useMemo(() => appId.trim().length > 0, [appId]);
-
-  function buildToolSummary(tool: string, data: Record<string, unknown>): string {
-    if (tool === "extract_lead_info") {
-      const lines: string[] = [];
-      const d = data as Record<string, string>;
-      if (d.name)             lines.push(`Your name is "${d.name}"`);
-      if (d.company)          lines.push(`Your company is "${d.company}"`);
-      if (d.industry)         lines.push(`Industry: ${d.industry}`);
-      if (d.timeline)         lines.push(`Timeline: ${d.timeline}`);
-      if (d.budget_readiness) lines.push(`Budget: ${d.budget_readiness}`);
-      if (d.decision_maker)   lines.push(`Decision maker: ${d.decision_maker}`);
-      if (d.email)            lines.push(`Email confirmed: ${d.email}`);
-      if (d.phone)            lines.push(`Phone: ${d.phone}`);
-      return lines.length > 0
-        ? `Knowing more about you... ${lines.join(" · ")}`
-        : "Updating your profile...";
-    }
-    if (tool === "capture_pain_point") {
-      return `Understanding your challenge... ${data.pain_point ?? "noted"}`;
-    }
-    if (tool === "score_lead") {
-      const temp = data.temperature as string;
-      const icon = temp === "Hot" ? "🔥" : temp === "Warm" ? "☀️" : "❄️";
-      return `Lead score: ${data.score}/100 — ${temp} ${icon}`;
-    }
-    if (tool === "recommend_offer") {
-      return `Recommending: ${data.offer_name}`;
-    }
-    if (tool === "detect_objection") {
-      return `Concern noted: ${(data.objection_type as string).replace(/_/g, " ")}`;
-    }
-    if (tool === "book_discovery_call") {
-      return data.confirmed
-        ? `Discovery call booked: ${data.slot} ✓`
-        : "Booking discovery call...";
-    }
-    if (tool === "generate_follow_up") {
-      return `Preparing follow-up: ${data.subject}`;
-    }
-    return "";
-  }
-
-  function renderToolCard(t: ToolLogEntry) {
-    const d = t.data;
-
-    if (t.tool === "extract_lead_info") {
-      const contactFields: { label: string; value: string }[] = [];
-      if (d.name)             contactFields.push({ label: "Name",     value: d.name as string });
-      if (d.company)          contactFields.push({ label: "Company",  value: d.company as string });
-      if (d.timeline)         contactFields.push({ label: "Timeline", value: d.timeline as string });
-      if (d.budget_readiness) contactFields.push({ label: "Budget",   value: d.budget_readiness as string });
-      if (d.decision_maker)   contactFields.push({ label: "Decision maker", value: d.decision_maker as string });
-      if (d.email)            contactFields.push({ label: "Email",    value: d.email as string });
-      if (d.phone)            contactFields.push({ label: "Phone",    value: d.phone as string });
-      return (
-        <div className="flex flex-col gap-1 py-1">
-          {!!d.industry && (
-            <div className="flex items-center gap-2">
-              <Building2 size={18} className="text-indigo-400 shrink-0" />
-              <span className="text-[10px] text-white/60">{d.industry as string}</span>
-            </div>
-          )}
-          {contactFields.length > 0 && (
-            <div className="flex items-start gap-2">
-              <User size={18} className="text-blue-400 mt-0.5 shrink-0" />
-              <div className="text-[10px] text-white/60 leading-relaxed">
-                {contactFields.map((f, i) => (
-                  <span key={i}>{i > 0 && <span className="text-white/20"> · </span>}<span className="text-white/40">{f.label}:</span> {f.value}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (t.tool === "capture_pain_point") {
-      const severityColor =
-        d.severity === "high" ? "text-red-400" :
-        d.severity === "medium" ? "text-amber-400" : "text-green-400";
-      return (
-        <div className="flex items-start gap-2 py-1">
-          <Frown size={18} className="text-orange-400 mt-0.5 shrink-0" />
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-white/60">{d.pain_point as string}</span>
-            {!!d.severity && (
-              <span className={`text-[9px] font-semibold uppercase ${severityColor}`}>{d.severity as string}</span>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (t.tool === "score_lead") {
-      const temp = d.temperature as string;
-      const tempColor = temp === "Hot" ? "text-red-400" : temp === "Warm" ? "text-amber-400" : "text-sky-400";
-      const barColor  = temp === "Hot" ? "bg-red-500"   : temp === "Warm" ? "bg-amber-500"   : "bg-sky-500";
-      const badgeClass = temp === "Hot"
-        ? "bg-red-500/20 text-red-300"
-        : temp === "Warm"
-        ? "bg-amber-500/20 text-amber-300"
-        : "bg-sky-500/20 text-sky-300";
-      const score = (d.score as number) ?? 0;
-      return (
-        <div className="py-1.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp size={18} className={tempColor} />
-            <span className="text-[10px] text-white/60">Lead score: {score}/100</span>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${badgeClass}`}>{temp}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${score}%` }} />
-          </div>
-        </div>
-      );
-    }
-
-    if (t.tool === "recommend_offer") {
-      return (
-        <div className="mt-1 rounded-lg bg-white/5 border border-white/10 p-2">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Gift size={18} className="text-purple-400" />
-            <span className="text-[10px] font-semibold text-white/80">{d.offer_name as string}</span>
-          </div>
-          {!!d.reason && <p className="text-[9px] text-white/40 leading-relaxed">{d.reason as string}</p>}
-        </div>
-      );
-    }
-
-    if (t.tool === "book_discovery_call") {
-      return (
-        <div className="mt-1 rounded-lg bg-white/5 border border-white/10 p-2">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <CalendarCheck size={18} className="text-green-400" />
-            <span className="text-[10px] font-semibold text-white/80">Discovery Call</span>
-          </div>
-          {!!d.slot && <p className="text-[9px] text-white/50 mb-2">{d.slot as string}</p>}
-          {!!d.confirmed && (
-            <a
-              href="https://calendar.google.com/calendar/u/0/r"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[9px] bg-green-500/20 text-green-300 px-2 py-1 rounded-full hover:bg-green-500/30 transition-colors"
-            >
-              <ExternalLink size={12} /> Open Calendar
-            </a>
-          )}
-        </div>
-      );
-    }
-
-    if (t.tool === "detect_objection") {
-      return (
-        <div className="flex items-center gap-2 py-1">
-          <AlertTriangle size={18} className="text-yellow-400 shrink-0" />
-          <span className="text-[10px] text-white/60">{(d.objection_type as string).replace(/_/g, " ")}</span>
-          {!!d.raw_quote && (
-            <span className="text-[9px] text-white/30 italic truncate max-w-[160px]">&ldquo;{d.raw_quote as string}&rdquo;</span>
-          )}
-        </div>
-      );
-    }
-
-    if (t.tool === "generate_follow_up") {
-      return (
-        <div className="flex items-center gap-2 py-1">
-          <Mail size={18} className="text-sky-400 shrink-0" />
-          <span className="text-[10px] text-white/60 truncate">{d.subject as string}</span>
-        </div>
-      );
-    }
-
-    // Fallback: plain text summary
-    return (
-      <div className="flex items-center gap-1.5 py-0.5">
-        <span className="text-green-400 text-[10px] shrink-0">✓</span>
-        <span className="text-white/40 text-[10px] italic">{t.summary}</span>
-      </div>
-    );
-  }
-
-  function handleToolEvent(event: { tool: string; timestamp: string; data: Record<string, unknown> }) {
-    const { tool, timestamp, data } = event;
-
-    const summary = buildToolSummary(tool, data);
-    if (!summary) return; // no_op, summary_updated, unknown — skip
-
-    const entry: ToolLogEntry = { tool, timestamp, summary, data };
-    const msgId = currentAssistantMsgIdRef.current;
-
-    if (msgId) {
-      // An assistant message for this turn already exists — attach directly
-      // (handles the case where RTM beat SSE to the frontend)
-      setTranscript((prev) => {
-        const idx = prev.findIndex((m) => m.id === msgId);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], tools: [...(next[idx].tools ?? []), entry] };
-          return next;
-        }
-        // Message not yet in transcript — fall back to buffer
-        pendingToolsRef.current.push(entry);
-        return prev;
-      });
-    } else {
-      // No assistant message yet — buffer until one arrives
-      pendingToolsRef.current.push(entry);
-    }
-  }
-
-  function openSse(channel: string) {
-    if (sseRef.current) sseRef.current.close();
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-    const es = new EventSource(`${apiBase}/events/${encodeURIComponent(channel)}`);
-    es.onmessage = (e) => {
-      try {
-        const payload = JSON.parse(e.data as string);
-        if (payload.type === "connected") return;
-        handleToolEvent(payload as { tool: string; timestamp: string; data: Record<string, unknown> });
-      } catch {
-        // ignore malformed events
-      }
-    };
-    sseRef.current = es;
-  }
-
-  function closeSse() {
-    sseRef.current?.close();
-    sseRef.current = null;
-  }
 
   function formatApiError(error: unknown, fallback: string): string {
     const axiosErr = error as AxiosError<{ detail?: unknown }> | undefined;
@@ -460,11 +267,6 @@ export default function AgentPage() {
   }
 
   useEffect(() => {
-    setChannelName(generateDefaultChannelName());
-    setUserUid(generateDefaultUserUid(DEFAULT_AGENT_UID));
-  }, []);
-
-  useEffect(() => {
     if (!isActive) {
       setMicVolumeLevel(0);
       if (volumePollerRef.current) {
@@ -486,37 +288,14 @@ export default function AgentPage() {
   }, [isActive]);
 
   function upsertTranscriptLine(id: string, speaker: TranscriptSpeaker, text: string) {
-    if (speaker === "user") {
-      // New user turn — clear so late SSE tools don't bleed onto the previous response
-      currentAssistantMsgIdRef.current = "";
-    } else if (speaker === "assistant") {
-      currentAssistantMsgIdRef.current = id;
-    }
-
-    // Drain pending tools BEFORE entering setState (avoids mutating ref inside pure updater)
-    const drainedTools =
-      speaker === "assistant" && pendingToolsRef.current.length > 0
-        ? pendingToolsRef.current.splice(0)
-        : [];
-
     setTranscript((prev) => {
       const idx = prev.findIndex((item) => item.id === id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          text,
-          // Merge any just-drained tools into an existing entry too
-          ...(drainedTools.length > 0 && {
-            tools: [...(next[idx].tools ?? []), ...drainedTools],
-          }),
-        };
+        next[idx] = { ...next[idx], text };
         return next.slice(-40);
       }
-      return [
-        ...prev.slice(-39),
-        { id, speaker, text, ...(drainedTools.length > 0 && { tools: drainedTools }) },
-      ];
+      return [...prev.slice(-39), { id, speaker, text }];
     });
   }
 
@@ -536,6 +315,49 @@ export default function AgentPage() {
       micUnmuteTimerRef.current = null;
     }
   }
+
+  // Handle RTM Transcript Updates & Sync to FastAPI DB
+  const handleRTMTranscriptSync = (items: ITranscriptHelperItem[]) => {
+    items.forEach((item) => {
+      if (item.final && !sentTurnsRef.current.has(item.id)) {
+        sentTurnsRef.current.add(item.id);
+        
+        const currentLeadId = leadIdRef.current;
+        const currentConversationId = conversationIdRef.current;
+        const currentAgentId = agentIdRef.current;
+
+        if (currentLeadId && currentConversationId && currentAgentId) {
+          api.post("/agora/convo/transcript/upsert", {
+            lead_id: currentLeadId,
+            conversation_id: currentConversationId,
+            agent_id: currentAgentId,
+            channel_name: activeChannelRef.current,
+            agent_uid: agentUidRef.current,
+            user_uid: userUidRef.current,
+            role: item.role,
+            text: item.text,
+            turn_id: item.turn_id,
+            is_final: true,
+            publisher_uid: item.uid,
+            timestamp: new Date(item.updated_at_ms).toISOString(),
+          })
+          .then((res) => {
+            // Update Faye Dashboard states with response snapshot
+            setBackendLeadProfile(res.data.lead_profile);
+            setBackendObjections(res.data.objections);
+            setBackendBuyingSignals(res.data.buying_signals);
+            setBackendLeadScore(res.data.lead_score);
+            setBackendLeadTemperature(res.data.lead_temperature);
+            setBackendRecommendedOffer(res.data.recommended_offer);
+            setBackendNextBestAction(res.data.next_best_action);
+          })
+          .catch((err) => {
+            console.error("[Faye API Sync Error]", err);
+          });
+        }
+      }
+    });
+  };
 
   function clearHalfDuplexMuteTimer() {
     if (micHalfDuplexMuteTimerRef.current) {
@@ -736,7 +558,64 @@ export default function AgentPage() {
     }, 350);
   }
 
+  async function saveShortTermMemoryInternal(silent = false) {
+    if (!agentId) {
+      throw new Error("No active agent_id available.");
+    }
 
+    const res = await api.post<ConvoMemorySaveResponse>("/agora/convo/memory/save", {
+      agent_id: agentId,
+      channel_name: channelName.trim(),
+      agent_uid: agentUid.trim(),
+      user_uid: userUid.trim(),
+    });
+    setMemorySummary(res.data.summary || "");
+    setMemoryMessageCount(res.data.message_count || 0);
+    if (!silent) {
+      setStatus(`Short-term memory saved (${res.data.message_count} messages).`);
+    }
+    return res.data;
+  }
+
+  async function saveShortTermMemory() {
+    if (isSavingMemory) return;
+    setIsSavingMemory(true);
+    setErrorMessage("");
+
+    try {
+      await saveShortTermMemoryInternal(false);
+    } catch (error) {
+      const message = formatApiError(error, "Failed to save short-term memory.");
+      setErrorMessage(message);
+      setStatus("Memory save failed");
+    } finally {
+      setIsSavingMemory(false);
+    }
+  }
+
+  async function injectSavedMemory() {
+    if (isInjectingMemory || !agentId) return;
+    setIsInjectingMemory(true);
+    setErrorMessage("");
+
+    try {
+      const res = await api.post<ConvoMemoryInjectResponse>("/agora/convo/memory/inject", {
+        agent_id: agentId,
+        channel_name: channelName.trim(),
+        agent_uid: agentUid.trim(),
+        user_uid: userUid.trim(),
+      });
+      setStatus(
+        `Memory injected (${res.data.system_messages_count} system message${res.data.system_messages_count === 1 ? "" : "s"}).`,
+      );
+    } catch (error) {
+      const message = formatApiError(error, "Failed to inject saved memory.");
+      setErrorMessage(message);
+      setStatus("Memory inject failed");
+    } finally {
+      setIsInjectingMemory(false);
+    }
+  }
 
   async function refreshHistoryIntoTranscript(agentIdOverride?: string) {
     const effectiveAgentId = agentIdOverride ?? agentId;
@@ -784,6 +663,7 @@ export default function AgentPage() {
 
   async function startSession() {
     if (isStarting || isActive) return;
+    stopSimulation(); // Stop simulation if running
 
     setErrorMessage("");
     setTranscript([]);
@@ -792,9 +672,12 @@ export default function AgentPage() {
     setAgentMetricsCount(0);
     setAgentState(EAgentState.UNKNOWN);
     setLastAgentError("");
+    setMemorySummary("");
+    setMemoryMessageCount(0);
     setRtmConnectionStatus("starting");
     setStatus("Starting Agora Conversational AI...");
     setIsStarting(true);
+    sentTurnsRef.current.clear();
 
     try {
       if (!appIdReady) {
@@ -850,39 +733,9 @@ export default function AgentPage() {
       const toolkitHandler: IConversationalAIAPIEventHandler = {
         onTranscriptUpdated: (_agentUserId, transcription) => {
           setTranscriptEventCount((prev) => prev + 1);
-          const items = transcription.items;
-
-          // Keep currentAssistantMsgIdRef in sync so handleToolEvent can attach directly
-          const lastItem = items.length > 0 ? items[items.length - 1] : null;
-          if (lastItem?.role === "user") {
-            currentAssistantMsgIdRef.current = "";
-          } else if (lastItem?.role === "assistant") {
-            currentAssistantMsgIdRef.current = lastItem.id;
-          }
-
-          // Drain any buffered tool events onto the last assistant message.
-          // Must happen outside of setState to avoid mutating a ref inside a pure updater.
-          const drainedTools =
-            lastItem?.role === "assistant" && pendingToolsRef.current.length > 0
-              ? pendingToolsRef.current.splice(0)
-              : [];
-          const drainTargetId = drainedTools.length > 0 ? (lastItem?.id ?? null) : null;
-
-          setTranscript((prev) => {
-            const existingById = new Map(prev.map((item) => [item.id, item]));
-            return items.slice(-40).map((item) => {
-              const existing = existingById.get(item.id);
-              const preserved = existing?.tools ?? [];
-              const fresh = item.id === drainTargetId ? drainedTools : [];
-              const allTools = [...preserved, ...fresh];
-              return {
-                id: item.id,
-                speaker: item.role as TranscriptSpeaker,
-                text: item.text,
-                ...(allTools.length > 0 && { tools: allTools }),
-              };
-            });
-          });
+          setTranscript(mapToolkitTranscript(transcription.items));
+          // Sync with the backend database
+          handleRTMTranscriptSync(transcription.items);
         },
         onAgentStateChanged: (_agentUserId, event) => {
           setAgentState(event.state);
@@ -917,16 +770,37 @@ export default function AgentPage() {
       await convoApi.subscribeMessage(channel_name);
 
       setStatus("Starting CAE agent...");
+      
+      // Check for campaign knowledge context
+      const knowledge = localStorage.getItem("campaign_knowledge");
+      if (knowledge) {
+        console.log("[Agent Console] Injecting campaign knowledge context...");
+      }
+
       const startRes = await api.post<ConvoStartResponse>("/agora/convo/start", {
         channel_name,
         user_uid,
         agent_uid: requestedAgentUid,
         tts_voice: voice,
         tts_speed: ttsSpeed,
+        knowledge: knowledge || undefined,
+        flow: agentType === "sales" ? "b2b" : "b2c",
+        agent_type: agentType
       });
 
-      const { agent_id, agent_uid } = startRes.data;
+      // Clear the knowledge after starting
+      localStorage.removeItem("campaign_knowledge");
+
+      const { agent_id, agent_uid: resp_agent_uid, lead_id: resp_lead_id, conversation_id: resp_convo_id } = startRes.data;
       setAgentId(agent_id);
+      agentIdRef.current = agent_id;
+      
+      setLeadId(resp_lead_id);
+      leadIdRef.current = resp_lead_id;
+
+      setConversationId(resp_convo_id);
+      conversationIdRef.current = resp_convo_id;
+
       setStatus("Joining RTC channel...");
 
       const joinUid = Number(user_uid);
@@ -1034,7 +908,6 @@ export default function AgentPage() {
       micTrackRef.current = micTrack;
       const denoiserAttached = await attachAiDenoiser(AgoraRTC, micTrack);
       if (!denoiserAttached) {
-        // Fallback to built-in suppression if AI denoiser is unavailable.
         try {
           await micTrack.setEnabled(false);
           await micTrack.setEnabled(true);
@@ -1047,9 +920,8 @@ export default function AgentPage() {
       setIsActive(true);
       setStatus(`Live on "${channel_name}" as ${user_uid}. Speak to the agent.`);
       setUserUid(user_uid);
-      setAgentUid(agent_uid);
+      setAgentUid(resp_agent_uid);
       setChannelName(channel_name);
-      openSse(channel_name);
       await refreshHistoryIntoTranscript(agent_id);
     } catch (error) {
       const message = formatApiError(error, "Failed to start session.");
@@ -1090,9 +962,15 @@ export default function AgentPage() {
         });
       }
 
-      closeSse();
       setStatus("Session stopped");
       setAgentId("");
+      setLeadId("");
+      setConversationId("");
+      
+      leadIdRef.current = "";
+      conversationIdRef.current = "";
+      agentIdRef.current = "";
+      
       setIsActive(false);
       setIsSpeaking(false);
       setAgentState(EAgentState.UNKNOWN);
@@ -1103,8 +981,6 @@ export default function AgentPage() {
       setAudioProcessingMode("browser-ans");
       clearMicUnmuteTimer();
       setTranscript([]);
-      pendingToolsRef.current = [];
-      currentAssistantMsgIdRef.current = "";
       setChannelName(generateDefaultChannelName());
       setUserUid(generateDefaultUserUid(agentUid.trim() || DEFAULT_AGENT_UID));
     } catch (error) {
@@ -1115,6 +991,122 @@ export default function AgentPage() {
       setIsStopping(false);
     }
   }
+
+  // Client Simulation Engine (when Agora credentials are absent or for quick sandbox walkthroughs)
+  const startSimulation = () => {
+    if (isSimulating) return;
+    setIsActive(false);
+    setIsSimulating(true);
+    setSimStep(0);
+    setTranscript([]);
+    sentTurnsRef.current.clear();
+    
+    // Clear backend states for B2B/B2C dashboards
+    setBackendLeadProfile(undefined);
+    setBackendObjections([]);
+    setBackendBuyingSignals([]);
+    setBackendLeadScore(0);
+    setBackendLeadTemperature("Cold");
+    setBackendRecommendedOffer("");
+    setBackendNextBestAction("");
+
+    let currentStep = 0;
+    const maxSteps = agentType === "sales" ? 6 : 5;
+
+    const runStep = () => {
+      currentStep++;
+      setSimStep(currentStep);
+      
+      // Update transcripts simulating client call
+      if (agentType === "sales") {
+        if (currentStep === 1) {
+          setTranscript([
+            { id: "sim-s1a", speaker: "user", text: "Hello? Hello! Is this the FFlow.ph voice agent?" },
+            { id: "sim-s1b", speaker: "assistant", text: "Hello! Yes, welcome to FFlow.ph. I'm your sales qualification agent. How can I help you today?" }
+          ]);
+        } else if (currentStep === 2) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s2a", speaker: "user", text: "Yeah, I'm calling from ABC Logistics. We've been having problems keeping track of inbound leads and manual follow-ups are taking too long." },
+            { id: "sim-s2b", speaker: "assistant", text: "I see. So you are looking to automate lead tracking for ABC Logistics to solve manual callback delays. What sector of logistics do you focus on, and how soon are you looking to fix this?" }
+          ]);
+        } else if (currentStep === 3) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s3a", speaker: "user", text: "We deal with fleet operations and supply chain management. We want to get this implemented immediately, hopefully this month." },
+            { id: "sim-s3b", speaker: "assistant", text: "Understood. Fleet operations and supply chain need quick tracking. Implementing this month is ideal. Who else is involved in approving this project budget?" }
+          ]);
+        } else if (currentStep === 4) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s4a", speaker: "user", text: "I'm the Managing Director, so I approve the budget. Speaking of budget, what are your rates? It might be too expensive for us." },
+            { id: "sim-s4b", speaker: "assistant", text: "Got it. As the Managing Director, you have direct approval. Regarding rates, our packages start at basic tiers. I understand pricing concerns, but we can verify the ROI by saving hours of manual labor per rep." }
+          ]);
+        } else if (currentStep === 5) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s5a", speaker: "user", text: "That makes sense. Can we schedule a quick call to check the demo?" },
+            { id: "sim-s5b", speaker: "assistant", text: "Absolutely! I recommend our Sales Automation Package. We can book a short discovery demo. How does tomorrow, May 28 at 2:00 PM sound?" }
+          ]);
+        } else if (currentStep === 6) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-s6a", speaker: "user", text: "Yes, May 28 at 2 PM works for me. Please send the meeting link." },
+            { id: "sim-s6b", speaker: "assistant", text: "Perfect! I've booked your slot for May 28 at 2:00 PM. I'm drafting a calendar invite and proposal summary for ABC Logistics now. Talk to you soon!" }
+          ]);
+        }
+      } else {
+        // Commerce simulation script
+        if (currentStep === 1) {
+          setTranscript([
+            { id: "sim-c1a", speaker: "user", text: "Hi, I'm looking to buy a new laptop for programming and React development. Do you have anything under 60k?" },
+            { id: "sim-c1b", speaker: "assistant", text: "Hello! I can definitely help with that. For programming and React development within a ₱60,000 budget, we have a few options. Are you looking for durability, or standard consumer builds?" }
+          ]);
+        } else if (currentStep === 2) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c2a", speaker: "user", text: "Definitely durability. I travel a lot for coding, so I want something tough." },
+            { id: "sim-c2b", speaker: "assistant", text: "Got it. I recommend the Lenovo ThinkPad E14 Gen 5, which is ₱58,999 and has Mil-spec durability, compared to the ASUS VivoBook 14 at ₱54,990 which is lighter but standard build. Do you want to go with the ThinkPad?" }
+          ]);
+        } else if (currentStep === 3) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c3a", speaker: "user", text: "Yeah, let's go with the ThinkPad. It fits my specs and budget." },
+            { id: "sim-c3b", speaker: "assistant", text: "Excellent choice! I've added the Lenovo ThinkPad E14 to your cart. Can you confirm your delivery name, address, and mobile number?" }
+          ]);
+        } else if (currentStep === 4) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c4a", speaker: "user", text: "Sure, my name is Juan dela Cruz, address is Project 4, Quezon City, phone 0917-889-1243." },
+            { id: "sim-c4b", speaker: "assistant", text: "Thank you! Name: Juan dela Cruz, address: Project 4, Quezon City verified. I'm initializing your checkout reference." }
+          ]);
+        } else if (currentStep === 5) {
+          setTranscript(prev => [
+            ...prev,
+            { id: "sim-c5a", speaker: "user", text: "Great, how do I pay? Do you take GCash?" },
+            { id: "sim-c5b", speaker: "assistant", text: "Yes, we support GCash. I've generated a GCash scan invoice. Your reference code is WPH-2026-00142. Please complete payment to confirm your order." }
+          ]);
+        }
+      }
+
+      if (currentStep >= maxSteps) {
+        if (simTimerRef.current) clearInterval(simTimerRef.current);
+      }
+    };
+
+    runStep();
+    simTimerRef.current = setInterval(runStep, 4500);
+  };
+
+  const stopSimulation = () => {
+    if (simTimerRef.current) {
+      clearInterval(simTimerRef.current);
+      simTimerRef.current = null;
+    }
+    setIsSimulating(false);
+    setSimStep(0);
+    setTranscript([]);
+  };
 
   return (
     <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
@@ -1141,24 +1133,41 @@ export default function AgentPage() {
         </div>
         
         {/* Bottom Control Bar */}
-        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-3">
-          {!isActive ? (
-            <button
-              type="button"
-              onClick={startSession}
-              disabled={isStarting}
-              className="rounded-full bg-cyan-500 hover:bg-cyan-400 px-8 py-4 text-lg font-bold text-black transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.7)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isStarting ? "Connecting..." : "Initialize Session"}
-            </button>
+        <div className="absolute bottom-10 z-10 flex flex-col items-center gap-4 w-[85%]">
+          {!isActive && !isSimulating ? (
+            <div className="flex flex-col gap-3.5 w-full items-center">
+              <button
+                type="button"
+                onClick={startSession}
+                disabled={isStarting}
+                className={`rounded-full px-8 py-3.5 text-sm font-bold text-black transition-all disabled:opacity-60 flex items-center gap-2 ${
+                  agentType === "sales"
+                    ? "bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]"
+                    : "bg-purple-400 hover:bg-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.6)]"
+                }`}
+              >
+                {isStarting ? "Connecting Agora..." : "Initialize Real-time Agent"}
+              </button>
+
+              <button
+                type="button"
+                onClick={startSimulation}
+                className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-6 py-2.5 text-xs font-semibold text-zinc-300 transition-all flex items-center gap-1.5"
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                Simulate Call Pipeline
+              </button>
+            </div>
           ) : (
             <>
               {/* Status label */}
-              <p className="text-sm font-medium text-white/70 flex items-center gap-2">
-                {isSpeaking ? (
-                  <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" />Speak or click button to interrupt agent</>
+              <p className="text-xs font-semibold tracking-wide text-zinc-400 flex items-center gap-2 bg-zinc-900/60 px-3 py-1.5 rounded-full border border-white/[0.05]">
+                {isSimulating ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />Simulation Playback Step {simStep}</>
+                ) : isSpeaking ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />Agent is speaking...</>
                 ) : (
-                  "Listening..."
+                  <><span className="inline-block w-2 h-2 rounded-full bg-zinc-600 animate-ping" />Listening to Client...</>
                 )}
               </p>
 
@@ -1168,29 +1177,31 @@ export default function AgentPage() {
                 <button
                   type="button"
                   onClick={() => setShowTranscript((v) => !v)}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showTranscript ? "bg-white/20 text-white" : "bg-white/10 text-white/40"}`}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all border ${
+                    showTranscript 
+                      ? "bg-white/10 text-white border-white/20" 
+                      : "bg-white/[0.02] text-white/30 border-white/[0.04]"
+                  }`}
                   title="Toggle subtitles"
                 >
-                  <Captions className="w-5 h-5" />
+                  <Captions className="w-4.5 h-4.5" />
                 </button>
 
                 {/* Center: mic + wave OR mic + stop */}
-                <div className="flex items-center gap-2 bg-white/10 rounded-full px-5 py-3">
-                  {/* Mic / mute button */}
+                <div className="flex items-center gap-2 bg-white/[0.05] border border-white/[0.07] rounded-full px-4 py-2.5">
                   <button
                     type="button"
                     onClick={toggleMicMute}
-                    className="text-white/80 hover:text-white transition-colors"
+                    disabled={isSimulating}
+                    className="text-white/80 hover:text-white transition-colors disabled:opacity-30"
                     title={isMicMuted ? "Unmute mic" : "Mute mic"}
                   >
-                    {isMicMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5" />}
+                    {isMicMuted ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4" />}
                   </button>
 
-                  {/* Divider */}
-                  <div className="w-px h-5 bg-white/20" />
+                  <div className="w-px h-4 bg-white/20" />
 
-                  {/* Wave bars when user speaking, animated dots otherwise, stop when AI speaking */}
-                  {isSpeaking ? (
+                  {isSpeaking && !isSimulating ? (
                     <button
                       type="button"
                       onClick={interruptAgent}
@@ -1198,45 +1209,42 @@ export default function AgentPage() {
                       className="text-white hover:text-red-300 transition-colors disabled:opacity-50"
                       title="Stop agent"
                     >
-                      <Square className="w-4 h-4 fill-current" />
+                      <Square className="w-3.5 h-3.5 fill-current" />
                     </button>
-                  ) : micVolumeLevel > 0.02 ? (
-                    /* Audio wave bars */
-                    <div className="flex items-center gap-[3px] h-5">
+                  ) : micVolumeLevel > 0.02 && !isSimulating ? (
+                    <div className="flex items-center gap-[3px] h-4">
                       {[0.6, 1, 0.7, 0.9, 0.5].map((base, i) => (
                         <div
                           key={i}
-                          className="w-[3px] rounded-full bg-cyan-400"
+                          className="w-[2.5px] rounded-full bg-cyan-400"
                           style={{
-                            height: `${Math.max(4, Math.min(20, micVolumeLevel * 100 * base))}px`,
+                            height: `${Math.max(3, Math.min(16, micVolumeLevel * 100 * base))}px`,
                             transition: "height 80ms ease",
                           }}
                         />
                       ))}
                     </div>
                   ) : (
-                    /* Idle dots */
                     <div className="flex items-center gap-1">
                       {[0, 1, 2, 3].map((i) => (
                         <div
                           key={i}
-                          className="w-[6px] h-[6px] rounded-full bg-cyan-400 animate-bounce"
-                          style={{ animationDelay: `${i * 0.15}s`, animationDuration: "1s" }}
+                          className={`w-1.5 h-1.5 rounded-full ${agentType === "sales" ? "bg-cyan-400" : "bg-purple-400"} animate-bounce`}
+                          style={{ animationDelay: `${i * 0.12}s`, animationDuration: "1s" }}
                         />
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* X — terminate */}
+                {/* Terminate */}
                 <button
                   type="button"
-                  onClick={stopSession}
-                  disabled={isStopping}
-                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-all disabled:opacity-50"
-                  title="Terminate session"
+                  onClick={isSimulating ? stopSimulation : stopSession}
+                  className="w-11 h-11 rounded-full bg-red-950/20 hover:bg-red-500/30 border border-red-500/20 flex items-center justify-center transition-all"
+                  title="Terminate Session"
                 >
-                  <X className="w-5 h-5 text-red-400" />
+                  <X className="w-4.5 h-4.5 text-red-400" />
                 </button>
               </div>
             </>
@@ -1244,102 +1252,41 @@ export default function AgentPage() {
         </div>
       </div>
 
-      {/* RIGHT SIDE: Config card + Conversation */}
-      <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto gap-5 bg-card/30">
-        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
-          FEWA CAE System
-        </h1>
-
-        {/* ── Config card ── */}
-        <div className="rounded-2xl border border-white/10 bg-[#0d0d1a] p-5 flex flex-col gap-5">
-
-          {/* Top bar: channel pill + three-dot menu */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 max-w-[70%]">
-              <span className={`w-2 h-2 rounded-full flex-none ${isActive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]" : "bg-white/20"}`} />
-              <span className="text-sm font-medium text-white/80 truncate">{channelName}</span>
-            </div>
+      {/* RIGHT COLUMN: Tabbed Dashboards & Transcripts */}
+      <div className="flex-1 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto gap-5 bg-zinc-950/80">
+        
+        {/* Header Tabs */}
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 shrink-0">
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setShowMoreMenu(true)}
-              className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-              title="More settings"
+              onClick={() => setActiveTab("faye")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "faye" 
+                  ? "bg-white/[0.06] text-white" 
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <Sparkles className={`w-3.5 h-3.5 ${agentType === "sales" ? "text-cyan-400" : "text-purple-400"}`} />
+              Faye Architect
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("dev")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === "dev" 
+                  ? "bg-white/[0.06] text-white" 
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+              Developer View
             </button>
           </div>
 
-          {/* Voice circles */}
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-3">VOICE</p>
-            <div className="flex justify-between gap-1">
-              {VOICE_DATA.map((v) => {
-                const selected = voice === v.id;
-                return (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => { if (!isActive && !isStarting) setVoice(v.id); }}
-                    disabled={isActive || isStarting}
-                    className="flex flex-col items-center gap-1.5 group disabled:opacity-60"
-                    title={`${v.name} — ${v.tag}`}
-                  >
-                    {/* Circle avatar */}
-                    <div className={`relative w-12 h-12 rounded-full overflow-hidden transition-all duration-200 ${
-                      selected
-                        ? "ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#0d0d1a] shadow-[0_0_10px_rgba(52,211,153,0.5)]"
-                        : "ring-1 ring-white/15 group-hover:ring-white/30"
-                    }`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={v.image}
-                        alt={v.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      {/* Selected overlay */}
-                      {selected && (
-                        <div className="absolute inset-0 bg-emerald-400/10 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-emerald-300 drop-shadow" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                    {/* Name */}
-                    <span className={`text-[10px] font-medium transition-colors leading-tight ${
-                      selected ? "text-emerald-400" : "text-white/40 group-hover:text-white/60"
-                    }`}>
-                      {v.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Speech speed pills */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">SPEECH SPEED</p>
-              <p className="text-sm font-bold text-emerald-400">{ttsSpeed}×</p>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {TTS_SPEED_OPTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { if (!isActive && !isStarting) setTtsSpeed(s); }}
-                  disabled={isActive || isStarting}
-                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all border ${
-                    ttsSpeed === s
-                      ? "bg-emerald-400/15 border-emerald-400 text-emerald-400"
-                      : "border-white/15 text-white/50 hover:border-white/30 hover:text-white/70"
-                  } disabled:opacity-60`}
-                >
-                  {s}×
-                </button>
-              ))}
-            </div>
-          </div>
+          <span className="text-[10px] font-mono text-zinc-500">
+            {leadId ? `LEAD: ${leadId.slice(0, 14)}...` : "NO ACTIVE LEAD"}
+          </span>
         </div>
 
         {/* TAB CONTENT: FAYE VISUAL WORKSPACE */}
@@ -1406,7 +1353,7 @@ export default function AgentPage() {
                       disabled={isActive || isStarting}
                       className="w-full rounded-md border border-white/[0.08] bg-zinc-950/60 px-2 py-1 text-zinc-300 outline-none disabled:opacity-60"
                     >
-                      {VOICE_DATA.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1472,43 +1419,21 @@ export default function AgentPage() {
 
       </div>
 
-        {/* Conversation */}
-        {showTranscript && <div className="flex-1 flex flex-col min-h-[250px] rounded-xl border bg-background/50 overflow-hidden shadow-sm">
-          <div className="bg-muted/30 p-3 border-b flex justify-between items-center">
-            <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Transcript</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
-            {transcript.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                No transcript yet. Session inactive.
-              </div>
-            ) : (
-              transcript.map((line) => (
-                <div
-                  key={line.id}
-                  className={`rounded-2xl p-4 text-sm max-w-[85%] ${
-                    line.speaker === "assistant"
-                      ? "bg-muted/80 text-foreground self-start rounded-bl-sm"
-                      : line.speaker === "user" 
-                      ? "bg-cyan-600/20 border border-cyan-500/30 text-cyan-50 self-end rounded-br-sm ml-auto"
-                      : "bg-gray-600/20 border border-gray-500/30 text-gray-300 self-center rounded-lg text-xs"
-                  }`}
-                >
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider opacity-50">{line.speaker}</p>
-                  <p className="leading-relaxed">{line.text}</p>
-                  {line.tools && line.tools.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-0.5">
-                      {line.tools.map((t, i) => (
-                        <div key={i}>{renderToolCard(t)}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>}
-      </div>
     </div>
+  );
+}
+
+export default function AgentPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-full bg-zinc-950 text-white flex items-center justify-center font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />
+          <span className="text-xs font-semibold text-cyan-400 tracking-widest uppercase">Loading Agent Console...</span>
+        </div>
+      </div>
+    }>
+      <AgentPageContent />
+    </Suspense>
   );
 }
