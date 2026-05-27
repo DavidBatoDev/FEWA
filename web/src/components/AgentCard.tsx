@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Activity, Cpu, Sparkles, Building, ShoppingBag, ArrowRight } from "lucide-react";
+import { 
+  CheckCircle2, 
+  Activity, 
+  Building, 
+  ShoppingBag, 
+  ArrowRight
+} from "lucide-react";
 
 interface OutcomeSim {
   tool: string;

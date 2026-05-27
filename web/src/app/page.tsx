@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AgentCard } from "@/components/AgentCard";
 import { CalendarDemo } from "@/components/CalendarDemo";
+import { CommerceDemo } from "@/components/CommerceDemo";
 import { 
   Cpu, 
   Sparkles, 
@@ -28,8 +29,16 @@ import {
   Play,
   CheckCircle2,
   ChevronRight,
-  Code
+  Code,
+  Mic,
+  MicOff,
+  Square,
+  X,
+  Captions,
+  Activity
 } from "lucide-react";
+import { GlobeAnimation } from "@/components/GlobeAnimation";
+import { FayeDashboard } from "@/components/FayeDashboard";
 
 // Scroll reveal observer
 function useScrollReveal() {
@@ -59,6 +68,25 @@ export default function LandingPage() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState<"sales" | "commerce">("sales");
   const [animateKey, setAnimateKey] = useState(0);
+  const [demoMode, setDemoMode] = useState<"b2b" | "b2c">("b2b");
+  const [animateDemoKey, setAnimateDemoKey] = useState(0);
+  const [simStep, setSimStep] = useState(1);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSimStep(prev => (prev % 6) + 1);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+  const [globalMode, setGlobalMode] = useState<"b2b" | "b2c">("b2b");
+
+  const handleSetGlobalMode = (mode: "b2b" | "b2c") => {
+    setGlobalMode(mode);
+    setSelectedAgent(mode === "b2b" ? "sales" : "commerce");
+    setDemoMode(mode);
+    setAnimateKey(prev => prev + 1);
+    setAnimateDemoKey(prev => prev + 1);
+  };
 
   const salesLogs = [
     { tool: "extract_lead_info()", time: "00:08", detail: "Company: ABC Logistics" },
@@ -112,37 +140,41 @@ export default function LandingPage() {
       {/* Floating frosted-glass header navbar (Likas style) */}
       <nav className="fixed left-1/2 top-5 z-40 w-[min(1180px,calc(100%-48px))] -translate-x-1/2 flex items-center justify-between rounded-full border border-white/5 bg-zinc-900/60 px-5 py-3.5 shadow-xl shadow-black/35 backdrop-blur-xl transition-all duration-300">
         <a href="#top" className="flex items-center gap-2 group">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 font-bold text-black transition-transform duration-300 group-hover:scale-105">
+          <div className={`relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr ${globalMode === 'b2b' ? 'from-cyan-500 to-blue-600' : 'from-purple-500 to-indigo-600'} font-bold text-black transition-transform duration-300 group-hover:scale-105`}>
             F
             <span className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 animate-pulse" />
           </div>
           <span className="text-base font-black tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-            FFlow<span className="text-cyan-400">.ph</span>
+            FFlow<span className={globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}>.ph</span>
           </span>
         </a>
         
         <div className="hidden md:flex items-center gap-6 text-xs font-semibold text-zinc-400 tracking-wider uppercase">
-          <a href="#agents" className="hover:text-white transition-all duration-200">Agents</a>
-          <a href="#demo-booking" className="hover:text-white transition-all duration-200 font-bold text-cyan-400">Calendar Demo</a>
-          <a href="#comparison" className="hover:text-white transition-all duration-200">Why FFlow.ph</a>
-          <a href="#tech-stack" className="hover:text-white transition-all duration-200">Tech Stack</a>
+          <a href="#mode-selector" className="hover:text-white transition-all duration-200">
+            {globalMode === 'b2b' ? 'B2B Agents' : 'B2C Agents'}
+          </a>
+          <a href="#demo-booking" className={`hover:text-white transition-all duration-200 font-bold ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>
+            {globalMode === 'b2b' ? 'Sales Demo' : 'Store Demo'}
+          </a>
+          <Link href="/comparison" className="hover:text-white transition-all duration-200">Comparison</Link>
+          <a href="#tech-stack" className="hover:text-white transition-all duration-200">Stack</a>
           <Link href="/dashboard" className="hover:text-white transition-all duration-200 flex items-center gap-1">
-            <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
-            Live Dashboard
+            <BarChart3 className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
+            Dashboard
           </Link>
           <Link href="/leads" className="hover:text-white transition-all duration-200 flex items-center gap-1">
-            <FileText className="w-3.5 h-3.5 text-purple-400" />
-            Record Detail
+            <FileText className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-blue-400' : 'text-pink-400'}`} />
+            Records
           </Link>
         </div>
 
         <div className="flex items-center gap-3">
           <Link 
             href="/campaign" 
-            className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-xs font-bold text-white transition-all flex items-center gap-1.5"
+            className="rounded-full bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] px-4 py-2 text-[10px] sm:text-xs font-bold text-white transition-all flex items-center gap-1.5"
           >
-            <Settings className="w-3.5 h-3.5 text-zinc-400" />
-            Configure Settings
+            <Settings className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-cyan-400/70' : 'text-purple-400/70'}`} />
+            Settings
           </Link>
         </div>
       </nav>
@@ -177,24 +209,24 @@ export default function LandingPage() {
           transform: translateY(0);
         }
         
-        /* 3D Rotating Phone Mockup Keyframes */
-        @keyframes phone3DRotation {
+        /* 3D Rotating Desktop Mockup Keyframes */
+        @keyframes desktop3DRotation {
           0% {
-            transform: rotateY(-18deg) rotateX(12deg) rotateZ(-1deg);
+            transform: rotateY(-12deg) rotateX(6deg) rotateZ(0deg);
           }
           50% {
-            transform: rotateY(18deg) rotateX(18deg) rotateZ(1deg);
+            transform: rotateY(12deg) rotateX(10deg) rotateZ(1deg);
           }
           100% {
-            transform: rotateY(-18deg) rotateX(12deg) rotateZ(-1deg);
+            transform: rotateY(-12deg) rotateX(6deg) rotateZ(0deg);
           }
         }
-        .animate-phone-3d {
-          animation: phone3DRotation 6s ease-in-out infinite;
+        .animate-desktop-3d {
+          animation: desktop3DRotation 8s ease-in-out infinite;
           transform-style: preserve-3d;
         }
 
-        /* 3D Phone screen items animations */
+        /* 3D screen items animations */
         @keyframes floatItem {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           50% { transform: translateY(-6px) rotate(0.5deg); }
@@ -245,7 +277,7 @@ export default function LandingPage() {
       `}} />
 
       {/* 2. HERO SECTION */}
-      <section id="top" className="relative min-h-screen px-6 pt-32 pb-24 md:pt-40 flex items-center overflow-hidden">
+      <section id="top" className="relative px-6 pt-32 pb-16 md:pt-40 flex items-center overflow-hidden">
         
         {/* Background visual components */}
         <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -256,148 +288,301 @@ export default function LandingPage() {
           <div className="absolute bottom-[8%] left-[-220px] h-[500px] w-[500px] border border-dashed border-white/[0.02] rounded-full opacity-35 animate-[spin_80s_linear_infinite_reverse]" />
         </div>
 
-        <div className="mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] items-center gap-14 pt-6">
+        <div className="mx-auto max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] items-center gap-14 pt-6">
           
           {/* Hero Left Content */}
-          <div className="space-y-6 text-center lg:text-left">
+          <div className="space-y-8 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/5 px-4 py-1.5 text-xs font-bold text-cyan-400 tracking-wide uppercase">
               <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: "6s" }} />
               Powered by Agora Conversational AI
             </div>
-            
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
-              Turn Voice Conversations Into{" "}
-              <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent block mt-2">
-                Business Outcomes
-              </span>
-            </h1>
 
-            <p className="text-base sm:text-lg text-zinc-300 max-w-2xl leading-relaxed mx-auto lg:mx-0">
-              The first vertical AI voice agent platform built specifically for Philippine businesses. 
-              We extend Agora&apos;s Conversational AI infrastructure with FFlow.ph&apos;s custom workflow layer—pre-built sales qualification, lead scoring, and instant e-commerce checkouts.
-            </p>
+            {/* LARGE MODE SELECTOR BOXES */}
+            <div id="mode-selector" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0 scroll-mt-32">
+              <button 
+                onClick={() => handleSetGlobalMode("b2b")}
+                className={`group relative p-6 rounded-[32px] border-2 transition-all duration-500 text-left overflow-hidden ${
+                  globalMode === 'b2b' 
+                    ? 'border-cyan-500 bg-cyan-500/5 shadow-[0_0_40px_rgba(6,182,212,0.2)] scale-[1.02] z-10' 
+                    : 'border-white/5 bg-zinc-900/40 hover:border-white/20 opacity-60 grayscale-[0.5]'
+                }`}
+              >
+                {/* Decorative glow for active state */}
+                {globalMode === 'b2b' && (
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/20 blur-2xl rounded-full" />
+                )}
+                
+                <div className={`p-3 rounded-2xl w-fit mb-4 transition-colors duration-500 ${globalMode === 'b2b' ? 'bg-cyan-500 text-zinc-950' : 'bg-white/5 text-zinc-500'}`}>
+                  <Building className="w-6 h-6" />
+                </div>
+                
+                <div className="space-y-1">
+                  <h3 className={`font-black text-xl tracking-tight transition-colors duration-500 ${globalMode === 'b2b' ? 'text-white' : 'text-zinc-500'}`}>
+                    B2B Mode
+                  </h3>
+                  <p className={`text-xs font-medium leading-relaxed transition-colors duration-500 ${globalMode === 'b2b' ? 'text-cyan-400/80' : 'text-zinc-600'}`}>
+                    Lead Qualification, Sales Scoring & Meeting Scheduling
+                  </p>
+                </div>
+
+                {globalMode === 'b2b' && (
+                  <div className="absolute bottom-4 right-6 text-cyan-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                )}
+              </button>
+
+              <button 
+                onClick={() => handleSetGlobalMode("b2c")}
+                className={`group relative p-6 rounded-[32px] border-2 transition-all duration-500 text-left overflow-hidden ${
+                  globalMode === 'b2c' 
+                    ? 'border-purple-500 bg-purple-500/5 shadow-[0_0_40px_rgba(168,85,247,0.2)] scale-[1.02] z-10' 
+                    : 'border-white/5 bg-zinc-900/40 hover:border-white/20 opacity-60 grayscale-[0.5]'
+                }`}
+              >
+                {/* Decorative glow for active state */}
+                {globalMode === 'b2c' && (
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-purple-500/20 blur-2xl rounded-full" />
+                )}
+
+                <div className={`p-3 rounded-2xl w-fit mb-4 transition-colors duration-500 ${globalMode === 'b2c' ? 'bg-purple-500 text-white' : 'bg-white/5 text-zinc-500'}`}>
+                  <ShoppingBag className="w-6 h-6" />
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className={`font-black text-xl tracking-tight transition-colors duration-500 ${globalMode === 'b2c' ? 'text-white' : 'text-zinc-500'}`}>
+                    B2C Mode
+                  </h3>
+                  <p className={`text-xs font-medium leading-relaxed transition-colors duration-500 ${globalMode === 'b2c' ? 'text-purple-400/80' : 'text-zinc-600'}`}>
+                    E-commerce Store, GCash Checkouts & Product Search
+                  </p>
+                </div>
+
+                {globalMode === 'b2c' && (
+                  <div className="absolute bottom-4 right-6 text-purple-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                )}
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] text-white">
+                {globalMode === "b2b" ? (
+                  <>
+                    Turn Voice Into{" "}
+                    <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent block mt-2">
+                      Business Outcomes
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Scale Your Sales With{" "}
+                    <span className="bg-gradient-to-r from-purple-400 via-pink-500 to-cyan-500 bg-clip-text text-transparent block mt-2">
+                      Voice Commerce
+                    </span>
+                  </>
+                )}
+              </h1>
+
+              <p className="text-base sm:text-lg text-zinc-300 max-w-2xl leading-relaxed mx-auto lg:mx-0">
+                {globalMode === "b2b" ? (
+                  "Capture and qualify leads 24/7. Our B2B agents score prospects, handle objections, and book discovery calls directly into your calendar without human intervention."
+                ) : (
+                  "Let your customers shop via natural voice. Our B2C agents guide buyers through your catalog, compare items, and prepare secure GCash-ready checkout references."
+                )}
+              </p>
+            </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
               <a 
                 href="#agents"
-                className="w-full sm:w-auto rounded-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(6,182,212,0.3)] transition-all hover:scale-[1.02]"
+                className={`w-full sm:w-auto rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-purple-500 hover:bg-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)]'} text-zinc-950 font-bold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]`}
               >
-                <span>Select Agent Type</span>
+                <span>{globalMode === 'b2b' ? 'View B2B Agents' : 'View B2C Agents'}</span>
                 <ArrowRight className="w-5 h-5" />
               </a>
               <Link
                 href="/dashboard"
                 className="w-full sm:w-auto rounded-full bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white font-semibold px-8 py-4 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
               >
-                <BarChart3 className="w-5 h-5 text-cyan-400" />
+                <BarChart3 className={`w-5 h-5 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
                 <span>View Dashboard</span>
               </Link>
             </div>
 
-            {/* Micro KPI Section */}
-            <div className="grid grid-cols-3 gap-6 pt-10 border-t border-white/[0.05] max-w-lg mx-auto lg:mx-0 text-left">
-              <div>
-                <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">90%</div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">Lead Qual. Rate</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">24/7</div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">B2C Checkout</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">₱1.2M+</div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mt-1">Mock Revenue</div>
-              </div>
+            <div className="pt-8 border-t border-white/[0.05] max-w-lg mx-auto lg:mx-0 text-left">
+              <p className={`text-sm font-medium leading-relaxed italic ${globalMode === 'b2b' ? 'text-cyan-400/90' : 'text-purple-400/90'}`}>
+                {globalMode === 'b2b' 
+                  ? "B2B Mode simplifies your sales funnel by instantly qualifying leads and booking meetings directly into your calendar using conversational AI."
+                  : "B2C Mode transforms your product store into a voice-enabled shop where customers can browse, compare, and pay via natural conversation."}
+              </p>
             </div>
           </div>
 
-          {/* Hero Right Content: 3D rotating phone mockup containing AI Agent Faye */}
-          <div className="w-full max-w-[450px] mx-auto flex items-center justify-center py-6" style={{ perspective: "1200px" }}>
-            <div className="animate-phone-3d w-[285px] h-[570px] rounded-[48px] border-[6px] border-zinc-800 bg-zinc-950 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),_0_0_50px_rgba(6,182,212,0.15)] relative overflow-hidden flex flex-col justify-between p-3.5 select-none">
-              
-              {/* Phone Speaker & Notch ("Dynamic Island") */}
-              <div className="absolute top-3.5 left-1/2 -translate-x-1/2 w-24 h-5 rounded-full bg-black z-30 flex items-center justify-center border border-white/[0.03]">
-                <div className="w-8 h-1 rounded-full bg-zinc-800 absolute top-1" />
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-900 border border-zinc-800 absolute right-2" />
-              </div>
-              
-              {/* Screen Top Status bar */}
-              <div className="w-full flex justify-between items-center text-[8px] font-semibold text-zinc-550 px-4 pt-1.5 z-20">
-                <span>13:30</span>
-                <div className="flex items-center gap-1.5">
-                  <span>5G</span>
-                  <div className="w-4 h-2 rounded-sm border border-zinc-500 flex items-center p-[1px]">
-                    <div className="w-full h-full bg-cyan-400 rounded-sm" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Glowing Phone Screen Borders */}
-              <div className="absolute inset-0 rounded-[42px] border border-cyan-500/10 pointer-events-none z-10" />
-
-              {/* Main Screen Content */}
-              <div className="flex-1 flex flex-col justify-between py-6 px-1 z-20 relative">
+          {/* Hero Right Content: 3D rotating Desktop mockup containing AI Agent Faye */}
+          <div className="w-full flex items-center justify-center py-6" style={{ perspective: "1500px" }}>
+            <div className="relative group">
+              {/* Desktop Monitor Shell */}
+              <div className={`animate-desktop-3d w-[580px] h-[360px] rounded-[24px] border-[10px] border-zinc-800 bg-zinc-950 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(6,182,212,0.1)] relative overflow-hidden flex flex-col p-1 select-none transition-all duration-700 ${globalMode === 'b2c' ? 'shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),_0_0_60px_rgba(168,85,247,0.1)]' : ''}`}>
                 
-                {/* Faye Active banner */}
-                <div className="text-center space-y-1 pt-2">
-                  <span className="text-[7px] tracking-widest font-black uppercase text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 rounded-full">
-                    FAYE VIRTUAL AI
-                  </span>
-                  <div className="text-[10px] font-bold text-white flex items-center justify-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    ACTIVE OUTCOME ROUTING
-                  </div>
-                </div>
+                {/* Glowing Bezel effect */}
+                <div className={`absolute inset-0 rounded-[14px] border border-white/5 pointer-events-none z-10`} />
 
-                {/* Concentric rotating radar circles */}
-                <div className="relative flex-1 flex items-center justify-center my-6">
-                  {/* Wave effect rings */}
-                  <div className="absolute w-36 h-36 rounded-full border border-cyan-500/10 animate-pulse-ring" style={{ animationDelay: "0s" }} />
-                  <div className="absolute w-28 h-28 rounded-full border border-cyan-500/15 animate-pulse-ring" style={{ animationDelay: "1s" }} />
-                  <div className="absolute w-20 h-20 rounded-full border border-purple-500/20 animate-pulse-ring" style={{ animationDelay: "1.5s" }} />
+                {/* Main Screen Content: Futuristic Dashboard UI */}
+                <div className="flex-1 flex flex-col p-4 z-20 relative bg-zinc-950/80 rounded-[12px] overflow-hidden border border-white/[0.03]">
                   
-                  {/* Faye Core Vector Avatar */}
-                  <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 border border-cyan-400/30 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] z-10">
-                    <span className="text-2xl font-black text-black select-none">F</span>
+                  {/* Monitor Top: System Status Bar */}
+                  <div className="flex items-center justify-between px-2 mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${globalMode === 'b2b' ? 'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]' : 'bg-purple-400 shadow-[0_0_12px_rgba(192,132,252,0.8)]'} animate-pulse`} />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black tracking-widest text-white uppercase font-mono">FFLOW_PH_CORE_v1.2</span>
+                        <span className="text-[6px] text-zinc-500 font-mono">LIVE_AGENT_ENVIRONMENT</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                      </div>
+                      <div className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/5 text-[7px] font-mono text-zinc-400">
+                        128-BIT_ENCRYPTED
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Rotating dashed ring */}
-                  <div className="absolute w-24 h-24 rounded-full border border-dashed border-cyan-400/30 animate-rotate-radar" />
-                </div>
+                  {/* Main Dashboard Grid - LANDSCAPE */}
+                  <div className="flex-1 grid grid-cols-12 gap-4 h-full">
+                    
+                    {/* Left 4 Cols: System Stats & AI Visual */}
+                    <div className="col-span-4 flex flex-col gap-4">
+                      <div className="flex-1 relative flex items-center justify-center overflow-hidden rounded-2xl bg-white/[0.01] border border-white/[0.04] shadow-inner">
+                        <div className="scale-[1.1] opacity-90 transform-gpu">
+                          <GlobeAnimation isSpeaking={true} />
+                        </div>
+                        <div className="absolute top-2 left-2 flex flex-col gap-1">
+                          <div className="w-4 h-[1px] bg-white/10" />
+                          <div className="w-6 h-[1px] bg-white/10" />
+                        </div>
+                      </div>
+                      
+                      <div className="h-20 rounded-2xl bg-zinc-900/60 border border-white/[0.03] p-3 flex items-center justify-between">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[7px] font-black text-zinc-500 uppercase tracking-widest">Voice Latency</span>
+                          <span className={`text-sm font-black font-mono ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>124ms</span>
+                        </div>
+                        <div className="flex items-end gap-[2px] h-8">
+                          {[0.4, 0.7, 0.5, 0.9, 0.6, 1.0, 0.3].map((h, i) => (
+                            <div key={i} className={`w-1 rounded-full ${globalMode === 'b2b' ? 'bg-cyan-500/30' : 'bg-purple-500/30'}`} style={{ height: `${h * 100}%` }}>
+                              <div className={`w-full rounded-full ${globalMode === 'b2b' ? 'bg-cyan-400' : 'bg-purple-400'} animate-pulse`} style={{ height: '30%' }} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
 
-                {/* Floating transcripts bubble inside phone */}
-                <div className="space-y-2.5 px-1 pb-4">
-                  {/* Active Transcript bubble */}
-                  <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-white/[0.08] shadow-lg text-[9.5px] leading-relaxed text-zinc-300 animate-float-item text-left">
-                    <span className="text-[7.5px] font-mono text-cyan-400 block uppercase mb-1">Qualifying B2B lead</span>
-                    &quot;We need to qualify and score fleet logistics leads instantly...&quot;
+                    {/* Middle 5 Cols: Main Activity Feed */}
+                    <div className="col-span-5 flex flex-col gap-4">
+                      <div className="flex-1 rounded-2xl bg-zinc-900/40 border border-white/[0.03] p-4 flex flex-col gap-3">
+                         <div className="flex justify-between items-center border-b border-white/[0.03] pb-2">
+                            <span className="text-[8px] font-black text-white uppercase tracking-tighter">Real-time Transcription</span>
+                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                         </div>
+                         <div className="space-y-2">
+                           <div className="flex gap-2">
+                              <div className="w-1 h-3 rounded-full bg-zinc-700 mt-1" />
+                              <div className="flex flex-col gap-1">
+                                <div className="w-32 h-2 bg-zinc-800 rounded-full" />
+                                <div className="w-24 h-1.5 bg-zinc-900 rounded-full" />
+                              </div>
+                           </div>
+                           <div className="flex gap-2 justify-end text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                <div className={`w-40 h-2 ${globalMode === 'b2b' ? 'bg-cyan-500/10' : 'bg-purple-500/10'} rounded-full`} />
+                                <div className={`w-28 h-1.5 ${globalMode === 'b2b' ? 'bg-cyan-500/5' : 'bg-purple-500/5'} rounded-full`} />
+                              </div>
+                              <div className={`w-1 h-3 rounded-full ${globalMode === 'b2b' ? 'bg-cyan-400' : 'bg-purple-400'} mt-1`} />
+                           </div>
+                         </div>
+                         <div className="mt-auto flex gap-2">
+                            <div className="flex-1 h-8 rounded-xl bg-zinc-950 border border-white/[0.02] flex items-center px-3">
+                               <div className="w-2 h-2 rounded-full bg-white/5 animate-pulse" />
+                            </div>
+                            <div className={`w-8 h-8 rounded-xl ${globalMode === 'b2b' ? 'bg-cyan-500' : 'bg-purple-500'} flex items-center justify-center`}>
+                               <Mic className="w-3.5 h-3.5 text-black" />
+                            </div>
+                         </div>
+                      </div>
+                    </div>
+
+                    {/* Right 3 Cols: Modular Widgets */}
+                    <div className="col-span-3 flex flex-col gap-4">
+                      {/* Score Meter Panel */}
+                      <div className="flex-1 rounded-2xl bg-zinc-900/80 border border-white/[0.05] p-3 flex flex-col items-center justify-center gap-2">
+                        <div className="relative w-14 h-14">
+                          <svg className="w-full h-full -rotate-90">
+                            <circle cx="28" cy="28" r="24" fill="transparent" stroke="currentColor" strokeWidth="3" className="text-zinc-800" />
+                            <circle 
+                              cx="28" cy="28" r="24" 
+                              fill="transparent" stroke="currentColor" strokeWidth="3" 
+                              strokeDasharray="150" strokeDashoffset="45"
+                              className={globalMode === 'b2b' ? 'text-cyan-500' : 'text-purple-500'} 
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs font-black text-white">75</span>
+                          </div>
+                        </div>
+                        <span className="text-[7px] font-black text-zinc-500 uppercase tracking-widest">Lead Score</span>
+                      </div>
+
+                      {/* Small Grid widget */}
+                      <div className="h-28 rounded-2xl bg-zinc-900/80 border border-white/[0.05] p-3">
+                         <div className="grid grid-cols-7 gap-1 h-full opacity-40">
+                            {Array.from({ length: 28 }).map((_, i) => (
+                              <div 
+                                key={i} 
+                                className={`rounded-[2px] ${
+                                  i % 7 === 0 ? (globalMode === 'b2b' ? 'bg-cyan-500/20' : 'bg-purple-500/20') : 'bg-zinc-800'
+                                }`} 
+                              />
+                            ))}
+                         </div>
+                      </div>
+                    </div>
+
                   </div>
 
-                  {/* Fired outcomes tracker */}
-                  <div className="p-2.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 text-[9px] font-mono text-cyan-400 flex items-center justify-between">
-                    <span>✓ score_lead() fired</span>
-                    <span className="font-bold bg-cyan-500 text-black px-1 rounded">HOT 🔴</span>
+                  {/* Desktop Footer: System HUD */}
+                  <div className="mt-4 pt-3 border-t border-white/[0.03] flex items-center justify-between px-2">
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Activity className={`w-3.5 h-3.5 ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`} />
+                        <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-widest">Signal_Strength: 98%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Database className="w-3.5 h-3.5 text-zinc-500" />
+                        <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-widest">Storage_Load: 12GB/TB</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-[1px] bg-zinc-800" />
+                      <span className={`text-[8px] font-mono font-black ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'} uppercase tracking-widest`}>Node_PH-01: READY</span>
+                    </div>
                   </div>
+
                 </div>
 
               </div>
 
-              {/* Phone bottom indicators / waveform */}
-              <div className="w-full pb-2 z-20 flex flex-col items-center gap-2">
-                {/* Horizontal audio waveform */}
-                <div className="flex items-center gap-1 h-8 justify-center">
-                  {[0.5, 0.8, 1.2, 0.9, 0.4, 0.7, 1.1, 0.6].map((delay, idx) => (
-                    <div 
-                      key={idx}
-                      className="w-[3px] bg-gradient-to-t from-cyan-400 to-blue-500 rounded-full animate-wave-bar" 
-                      style={{ animationDelay: `${delay}s`, animationDuration: "1s" }}
-                    />
-                  ))}
-                </div>
-                {/* Home indicator bar */}
-                <div className="w-24 h-1 rounded-full bg-zinc-700" />
-              </div>
-
+              {/* Desktop Monitor Stand */}
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-[-40px] w-28 h-20 bg-gradient-to-b from-zinc-800 to-zinc-900 border-x border-zinc-700 z-0 animate-desktop-3d" style={{ animationDelay: '0s', clipPath: 'polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)' }} />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-[-60px] w-48 h-4 bg-zinc-800 rounded-full border border-zinc-700 shadow-2xl z-0 animate-desktop-3d" style={{ animationDelay: '0s' }} />
+              
+              {/* Reflection/Glow below */}
+              <div className={`absolute left-1/2 -translate-x-1/2 bottom-[-80px] w-64 h-8 ${globalMode === 'b2b' ? 'bg-cyan-500/10' : 'bg-purple-500/10'} blur-3xl rounded-full pointer-events-none`} />
             </div>
           </div>
 
@@ -405,7 +590,7 @@ export default function LandingPage() {
       </section>
 
       {/* 3. AGENT CARDS SECTION */}
-      <section id="agents" className="mx-auto max-w-7xl px-6 py-24 scroll-mt-20">
+      <section id="agents" className="mx-auto max-w-7xl px-6 py-16 scroll-mt-20">
         <div className="text-center space-y-4 mb-16 reveal-item">
           <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">DEPLOYABLE MODULES</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-sans">Choose Your Business Agent</h2>
@@ -418,10 +603,7 @@ export default function LandingPage() {
         <div className="flex justify-center mb-10 reveal-item">
           <div className="inline-flex p-1.5 rounded-full border border-white/[0.06] bg-zinc-900/60 backdrop-blur-xl">
             <button
-              onClick={() => {
-                setSelectedAgent("sales");
-                setAnimateKey(prev => prev + 1);
-              }}
+              onClick={() => handleSetGlobalMode("b2b")}
               className={`flex items-center gap-2 rounded-full px-6 py-3 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
                 selectedAgent === "sales"
                   ? "bg-cyan-500 text-zinc-950 shadow-[0_0_20px_rgba(6,182,212,0.35)] font-black"
@@ -432,10 +614,7 @@ export default function LandingPage() {
               B2B Sales Agent
             </button>
             <button
-              onClick={() => {
-                setSelectedAgent("commerce");
-                setAnimateKey(prev => prev + 1);
-              }}
+              onClick={() => handleSetGlobalMode("b2c")}
               className={`flex items-center gap-2 rounded-full px-6 py-3 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
                 selectedAgent === "commerce"
                   ? "bg-purple-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] font-black"
@@ -487,18 +666,101 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 4. INTERACTIVE CALENDAR DEMO SECTION */}
-      <section id="demo-booking" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 reveal-item-slide-top">
-        <div className="text-center space-y-4 mb-16">
-          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">INTERACTIVE PREVIEW</span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">Experience the Agent Pipeline</h2>
+      {/* 4. INTERACTIVE CALENDAR & COMMERCE DEMO SECTION - REMOVED REVEAL FOR STABILITY */}
+      <section id="demo-booking" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20">
+        <div className="text-center space-y-4 mb-10">
+          <span className={`text-xs font-bold tracking-widest uppercase ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>INTERACTIVE PREVIEW</span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+            {globalMode === 'b2b' ? 'Lead Qualification Sandbox' : 'Voice Commerce Sandbox'}
+          </h2>
           <p className="text-sm text-zinc-400 max-w-xl mx-auto">
-            Book a test demo slot using the calendar widget below. Watch how the B2B agent fires tools and generates follow-ups dynamically.
+            {globalMode === 'b2b' 
+              ? 'Test how our agents qualify business leads and book them directly into your schedule.' 
+              : 'Experience a conversational checkout journey—from preference matching to GCash-ready references.'}
           </p>
         </div>
+
+        {/* B2B vs B2C Sandbox Mode Selector */}
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex p-1 rounded-full border border-white/[0.05] bg-zinc-950/80 backdrop-blur-xl">
+            <button
+              onClick={() => handleSetGlobalMode("b2b")}
+              className={`flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                demoMode === "b2b"
+                  ? "bg-cyan-500 text-zinc-950 shadow-[0_0_15px_rgba(6,182,212,0.3)] font-black"
+                  : "text-zinc-550 hover:text-white"
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              B2B Call Scheduler
+            </button>
+            <button
+              onClick={() => handleSetGlobalMode("b2c")}
+              className={`flex items-center gap-1.5 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                demoMode === "b2c"
+                  ? "bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] font-black"
+                  : "text-zinc-550 hover:text-white"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              B2C Cart Checkout
+            </button>
+          </div>
+        </div>
         
-        <div className="reveal-item-slide-up">
-          <CalendarDemo />
+        <div key={animateDemoKey} className="space-y-12">
+          {demoMode === "b2b" ? <CalendarDemo mode="b2b" /> : <CalendarDemo mode="b2c" />}
+
+          {/* New Sales/Commerce Workflow Demo Section - ALWAYS VISIBLE */}
+          <div className="pt-16 border-t border-white/[0.05] text-left">
+            <div className="text-center space-y-4 mb-10">
+              <span className={`text-[10px] font-black tracking-[0.2em] uppercase ${globalMode === 'b2b' ? 'text-cyan-400' : 'text-purple-400'}`}>System Logic Demo</span>
+              <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
+                Faye&apos;s System Intelligence
+              </h3>
+              <p className="text-sm text-zinc-500 max-w-xl mx-auto italic">
+                Observe how Faye processes voice transcripts into structured business data in real-time.
+              </p>
+            </div>
+
+            <div className="relative group">
+              {/* High-intensity glow */}
+              <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/20 via-transparent to-purple-500/20 blur-3xl opacity-100 transition-opacity" />
+              
+              <div className="relative rounded-[40px] border-4 border-white/10 bg-zinc-900 p-4 sm:p-8 overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)]">
+                {/* Simulated playback status */}
+                <div className="absolute top-6 right-8 z-30 flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500 text-[10px] font-black text-black uppercase tracking-widest shadow-lg">
+                    <div className="w-2 h-2 rounded-full bg-black animate-pulse" />
+                    LIVE_WORKFLOW_SYNC
+                  </div>
+                </div>
+
+                <div className="max-w-5xl mx-auto h-[800px] flex flex-col relative z-20">
+                  <FayeDashboard 
+                    type={demoMode === "b2b" ? "sales" : "commerce"} 
+                    transcript={[]} 
+                    simulationActive={true}
+                    simulationStep={simStep}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-8 flex justify-center">
+              <Link 
+                href="/agent" 
+                className={`flex items-center gap-2 px-8 py-3 rounded-full border-2 font-bold text-xs uppercase tracking-widest transition-all ${
+                  globalMode === 'b2b' 
+                    ? 'border-cyan-500/30 text-cyan-400 hover:bg-cyan-500 hover:text-black' 
+                    : 'border-purple-500/30 text-purple-400 hover:bg-purple-500 hover:text-white'
+                }`}
+              >
+                Launch Production Console
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -594,27 +856,29 @@ export default function LandingPage() {
       {/* 6. TECH STACK GRID SECTION */}
       <section id="tech-stack" className="mx-auto max-w-7xl px-6 py-24 border-t border-white/[0.03] scroll-mt-20 bg-gradient-to-b from-transparent to-zinc-950">
         <div className="text-center space-y-4 mb-16 reveal-item">
-          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">LOCKED-IN PLATFORM STACK</span>
-          <h2 className="text-3xl font-extrabold tracking-tight text-white font-sans">Modern Developer Infrastructure</h2>
+          <span className="text-xs font-bold tracking-widest uppercase text-cyan-400">FINAL LOCKED MVP STACK</span>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white font-sans">Full-Stack AI Infrastructure</h2>
           <p className="text-sm text-zinc-450 max-w-md mx-auto">
-            High performance framework selections built for sub-second latency voice interactions.
+            High performance framework selections built for hackathon speed and sub-second latency.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-5xl mx-auto reveal-item">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 reveal-item">
           {[
-            { name: "Next.js 16", label: "React Frontend Layout", icon: Code, color: "text-cyan-400" },
-            { name: "Agora SDK", label: "Sub-second RTC Voice", icon: MessageSquare, color: "text-blue-400" },
-            { name: "OpenAI GPT", label: "Structured Tool-Calling", icon: Sparkles, color: "text-purple-400" },
-            { name: "Couchbase", label: "Capella Real-time DB", icon: Database, color: "text-pink-400" },
-            { name: "FastAPI", label: "Python Business Logic", icon: Layers, color: "text-emerald-400" }
+            { name: "Frontend", label: "Next.js, TS, Tailwind, shadcn/ui", icon: Code, color: "text-cyan-400" },
+            { name: "Backend", label: "FastAPI + Python", icon: Layers, color: "text-emerald-400" },
+            { name: "Database", label: "Couchbase Free Tier", icon: Database, color: "text-pink-400" },
+            { name: "AI", label: "OpenAI GPT-4o mini", icon: Sparkles, color: "text-purple-400" },
+            { name: "Voice", label: "Agora Web SDK", icon: MessageSquare, color: "text-blue-400" },
+            { name: "FE Hosting", label: "Vercel Free Tier", icon: Building, color: "text-yellow-400" },
+            { name: "BE Hosting", label: "Render / Railway", icon: ShoppingBag, color: "text-orange-400" }
           ].map((stack, idx) => {
             const Icon = stack.icon;
             return (
-              <div key={idx} className="p-5 rounded-2xl border border-white/[0.05] bg-zinc-900/30 flex flex-col items-center justify-center text-center space-y-2">
-                <Icon className={`w-8 h-8 ${stack.color}`} />
-                <div className="font-bold text-sm text-white">{stack.name}</div>
-                <div className="text-[10px] text-zinc-550">{stack.label}</div>
+              <div key={idx} className="p-4 rounded-2xl border border-white/[0.05] bg-zinc-900/30 flex flex-col items-center justify-center text-center space-y-2 hover:bg-white/[0.05] transition-all group">
+                <Icon className={`w-6 h-6 ${stack.color} group-hover:scale-110 transition-transform`} />
+                <div className="font-bold text-[11px] text-white">{stack.name}</div>
+                <div className="text-[9px] text-zinc-550 leading-tight">{stack.label}</div>
               </div>
             );
           })}
