@@ -1009,7 +1009,7 @@ export default function LandingPage() {
                 <h4 className="text-sm font-bold text-white uppercase tracking-wider">Hackathon Velocity</h4>
                 <p className="text-[9px] text-zinc-500 leading-relaxed uppercase font-mono tracking-widest">Recommended BE Hosting</p>
                 <div className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mt-2">
-                  Render or Railway
+                  GCP
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed pt-1">
                   Selected for extreme deployment simplicity, zero-config SSL, and rapid database connection setup.
