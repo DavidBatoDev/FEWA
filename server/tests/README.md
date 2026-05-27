@@ -29,6 +29,13 @@ This directory contains test files for the PDF extraction feature.
   - Manual extraction endpoint
   - Lead data verification
 
+### Database Population
+- **populate_test_data.py** - Populates test data into Couchbase via API calls
+  - Creates real database records for testing
+  - Tests automatic PDF extraction
+  - Tests manual extraction endpoint
+  - Verifies data in database
+
 ## Running Tests
 
 ### Run Unit Tests
@@ -59,6 +66,24 @@ cd server
 cd server
 .venv/bin/python tests/test_api_integration.py
 ```
+
+### Populate Test Data into Database
+```bash
+# Terminal 1: Start server
+cd server
+.venv/bin/python run.py
+
+# Terminal 2: Populate database
+cd server
+.venv/bin/python tests/populate_test_data.py
+```
+
+This will create:
+- 2 intake_forms documents
+- 2 leads documents  
+- 2 lead_context_docs documents
+
+You can verify the data in Couchbase UI.
 
 ## Test Requirements
 
