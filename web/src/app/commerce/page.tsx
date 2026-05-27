@@ -28,6 +28,7 @@ import type {
   AIDenoiserProcessorMode,
   IAIDenoiserProcessor,
 } from "agora-extension-ai-denoiser";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type ConvoStartResponse = {
   agent_id: string;
@@ -142,7 +143,11 @@ export default function CommercePage() {
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
   const [voice, setVoice] = useState("coral");
   const [ttsSpeed, setTtsSpeed] = useState(TTS_SPEED_DEFAULT);
-  const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
+  const [userUid, setUserUid] = useState("");
+
+  useEffect(() => {
+    if (!userUid) setUserUid(generateDefaultUserUid(DEFAULT_AGENT_UID));
+  }, []);
 
   const [agentId, setAgentId] = useState("");
   const [isStarting, setIsStarting] = useState(false);
@@ -1019,9 +1024,15 @@ export default function CommercePage() {
   }
 
   return (
-    <div className="dark h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
+    <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
       {/* LEFT SIDE: Globe & action button */}
-      <div className="relative w-full md:w-1/2 h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/20">
+      <div className="keep-dark bg-zinc-950 relative w-full md:w-1/2 h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/20">
+        
+        {/* Theme Toggle Button */}
+        <div className="absolute top-6 right-6 z-20">
+          <ThemeToggle />
+        </div>
+        
         <div className="absolute inset-0 w-full h-full pointer-events-none opacity-90 flex items-center justify-center">
           <GlobeAnimation isSpeaking={isSpeaking} />
         </div>

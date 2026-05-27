@@ -27,6 +27,7 @@ import type {
   IAIDenoiserProcessor,
 } from "agora-extension-ai-denoiser";
 import { FayeDashboard } from "@/components/FayeDashboard";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type ConvoStartResponse = {
   agent_id: string;
@@ -164,11 +165,18 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
   const sentTurnsRef = useRef<Set<string>>(new Set());
 
   // Input states
-  const [channelName, setChannelName] = useState(() => queryChannel || generateDefaultChannelName());
+  const [channelName, setChannelName] = useState("");
   const [agentUid, setAgentUid] = useState(DEFAULT_AGENT_UID);
-  const [voice, setVoice] = useState(() => queryVoice || "alloy");
+  const [voice, setVoice] = useState("alloy");
   const [ttsSpeed, setTtsSpeed] = useState(TTS_SPEED_DEFAULT);
-  const [userUid, setUserUid] = useState(() => generateDefaultUserUid(DEFAULT_AGENT_UID));
+  const [userUid, setUserUid] = useState("");
+
+  // Initialize random values on mount
+  useEffect(() => {
+    if (!channelName) setChannelName(queryChannel || generateDefaultChannelName());
+    if (!userUid) setUserUid(generateDefaultUserUid(DEFAULT_AGENT_UID));
+    if (queryVoice) setVoice(queryVoice);
+  }, [queryChannel, queryVoice]);
 
   // Sync state refs on inputs
   useEffect(() => {
@@ -1101,10 +1109,15 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
   };
 
   return (
-    <div className="dark h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
+    <div className="h-screen w-full bg-background text-foreground overflow-hidden flex flex-col md:flex-row">
       
       {/* LEFT COLUMN: Sphere Animation & Control Panel */}
-      <div className="relative w-full md:w-[40%] h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/10 bg-zinc-950">
+      <div className="keep-dark relative w-full md:w-[40%] h-1/2 md:h-full flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-border/10 bg-zinc-950">
+        
+        {/* Theme Toggle Button */}
+        <div className="absolute top-6 right-6 z-20">
+          <ThemeToggle />
+        </div>
         
         {/* Glow Header Brand */}
         <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
@@ -1291,6 +1304,7 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
               backendNextBestAction={backendNextBestAction}
               simulationActive={isSimulating}
               simulationStep={simStep}
+              showTranscript={showTranscript}
             />
           </div>
         )}
@@ -1402,47 +1416,7 @@ export function AgentPageContent({ forcedType }: { forcedType?: "sales" | "comme
           </div>
         )}
 
-        {/* BOTTOM SECTION: CONVERSATION TRANSCRIPT STREAM */}
-        {showTranscript && (
-          <div className="flex-1 flex flex-col min-h-[220px] max-h-[300px] rounded-3xl border border-white/[0.06] bg-zinc-900/30 overflow-hidden shadow-sm shrink-0">
-            <div className="bg-white/[0.02] px-4 py-2.5 border-b border-white/[0.05] flex justify-between items-center shrink-0">
-              <h2 className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 font-mono">
-                <Captions className="w-3.5 h-3.5 text-cyan-400" />
-                Live Conversation Subtitles
-              </h2>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col bg-zinc-950/20">
-              {transcript.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
-                  No transcript available. Start a session or trigger a simulation playback.
-                </div>
-              ) : (
-                transcript.map((line) => (
-                  <div
-                    key={line.id}
-                    className={`rounded-2xl p-3.5 text-xs max-w-[85%] shadow-[0_5px_15px_rgba(0,0,0,0.1)] transition-all ${
-                      line.speaker === "assistant"
-                        ? "bg-zinc-900 border border-white/[0.04] text-zinc-100 self-start rounded-bl-sm"
-                        : line.speaker === "user" 
-                        ? `${
-                            agentType === "sales" 
-                              ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-50" 
-                              : "bg-purple-500/10 border-purple-500/20 text-purple-50"
-                          } border self-end rounded-br-sm ml-auto`
-                        : "bg-zinc-800/40 border border-white/[0.04] text-zinc-400 self-center rounded-lg text-[10px]"
-                    }`}
-                  >
-                    <p className="mb-1 text-[8px] font-mono font-black uppercase tracking-wider opacity-40">
-                      {line.speaker === "assistant" ? "AI Voice Agent" : line.speaker === "user" ? "Client Buyer" : "System Notification"}
-                    </p>
-                    <p className="leading-relaxed font-sans">{line.text}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+
       </div>
 
     </div>
