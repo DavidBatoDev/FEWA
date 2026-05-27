@@ -139,3 +139,10 @@ Body:
 - Support optional PDF upload (linking to `POST /leads/{lead_id}/context-docs`) and integrate form submission with `POST /intake-forms` for NoSQL storing with the ultimate goal of booking a discovery call.
 Assignee: `@<frontend-teammate>`
 Label: `frontend`
+
+### 19) [Backend] Refine intake forms schema and Couchbase lead mapping
+Body:
+- Expand `POST /intake-forms` and `IntakeFormCreateRequest` schema to support: contact name, company description, pain points, target clients, urgency, budget readiness, decision-maker status, preferred next step, and optional PDF attachment.
+- Persist the refined fields to the Couchbase `intake_forms` document and automatically map them to the linked `leads` document fields, making them ready for downstream AI scoring and discovery calls.
+Assignee: `@<backend-teammate>`
+Label: `backend`
