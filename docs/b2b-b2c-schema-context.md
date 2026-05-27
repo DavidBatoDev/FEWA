@@ -98,6 +98,11 @@ Fields:
 - `body`: `string`
 - `status`: usually `"draft"`
 - `created_at`: ISO timestamp string
+- `delivery_status`: `"sent"|"failed"|"skipped_no_email"` (B2B end-flow delivery metadata)
+- `delivered_at`: ISO timestamp string|null
+- `delivery_error`: `string|null`
+- `provider`: `string` (currently `smtp`)
+- `provider_message_id`: `string|null`
 
 ### `campaigns`
 Purpose: campaign setup and qualification config.

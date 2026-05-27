@@ -22,8 +22,11 @@ LEAD_STRING_FIELDS = {
     "call_slot",
     "context_status",
     "conversation_summary",
+    "follow_up_subject",
+    "follow_up_body",
     "recommended_offer",
     "next_best_action",
+    "discovery_call_schedule",
     "status",
     "created_at",
     "updated_at",
@@ -196,6 +199,7 @@ def sanitize_lead_dict(value: Any) -> dict[str, Any]:
 
     out["lead_score"] = _as_int(raw.get("lead_score", 0), default=0)
     out["asked_for_proposal"] = _as_bool(raw.get("asked_for_proposal", False), default=False)
+    out["is_potential_lead"] = _as_bool(raw.get("is_potential_lead", False), default=False)
     out["score_breakdown"] = raw.get("score_breakdown") if isinstance(raw.get("score_breakdown"), dict) else None
 
     temp = _as_optional_string(raw.get("lead_temperature"))

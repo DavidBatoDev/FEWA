@@ -24,6 +24,7 @@ from app.services.sales_workflow import (
     now_iso,
     refresh_sales_state_from_transcript,
 )
+from app.services.email_service import send_b2b_follow_up_email, is_valid_email
 from app.db.couchbase import get_active_flow, get_collection, get_scope
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -326,6 +327,8 @@ async def end_conversation(req: EndRequest):
                 "body": "Thanks for your time today. We will send follow-up details shortly.",
             }
         follow_up_id = f"followup::{uuid.uuid4()}"
+        lead.follow_up_subject = follow_up_data["subject"]
+        lead.follow_up_body = follow_up_data["body"]
         follow_up_doc = {
             "type": "follow_up",
             "lead_id": req.lead_id,
@@ -333,7 +336,58 @@ async def end_conversation(req: EndRequest):
             "body": follow_up_data["body"],
             "status": "draft",
             "created_at": ts,
+            "delivery_status": "skipped_no_email",
+            "delivered_at": None,
+            "delivery_error": None,
+            "provider": "smtp",
+            "provider_message_id": None,
         }
+
+        email_delivery = {
+            "status": "skipped_no_email",
+            "provider": "smtp",
+            "message_id": None,
+            "error": None,
+        }
+
+        active_flow = get_active_flow()
+        recipient_email = (lead.email or "").strip().lower()
+        if active_flow == "b2b" and recipient_email:
+            if is_valid_email(recipient_email):
+                delivery = send_b2b_follow_up_email(
+                    to_email=recipient_email,
+                    subject=follow_up_data["subject"],
+                    body=follow_up_data["body"],
+                )
+                if delivery.get("success"):
+                    follow_up_doc["delivery_status"] = "sent"
+                    follow_up_doc["delivered_at"] = now_iso()
+                    follow_up_doc["provider_message_id"] = delivery.get("message_id")
+                    email_delivery = {
+                        "status": "sent",
+                        "provider": delivery.get("provider", "smtp"),
+                        "message_id": delivery.get("message_id"),
+                        "error": None,
+                    }
+                else:
+                    follow_up_doc["delivery_status"] = "failed"
+                    follow_up_doc["delivery_error"] = delivery.get("error")
+                    follow_up_doc["provider_message_id"] = delivery.get("message_id")
+                    email_delivery = {
+                        "status": "failed",
+                        "provider": delivery.get("provider", "smtp"),
+                        "message_id": delivery.get("message_id"),
+                        "error": delivery.get("error"),
+                    }
+            else:
+                follow_up_doc["delivery_status"] = "failed"
+                follow_up_doc["delivery_error"] = "invalid_recipient_email"
+                email_delivery = {
+                    "status": "failed",
+                    "provider": "smtp",
+                    "message_id": None,
+                    "error": "invalid_recipient_email",
+                }
 
         lead_payload = sanitize_lead_dict(lead.model_dump())
         conversation_payload = sanitize_conversation_dict(conversation.model_dump())
@@ -354,6 +408,7 @@ async def end_conversation(req: EndRequest):
             "conversation": conversation_payload,
             "follow_up": follow_up_payload,
             "follow_up_id": follow_up_id,
+            "email_delivery": email_delivery,
         }
     except DocumentNotFoundException:
         raise HTTPException(status_code=404, detail="Lead or conversation not found")

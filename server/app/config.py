@@ -26,5 +26,14 @@ class Settings(BaseSettings):
     backend_public_url: str = ""
     custom_llm_api_key: str = ""
 
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "Workflow PH"
+    smtp_use_tls: bool = True
+    smtp_timeout_seconds: int = 10
+
 
 settings = Settings()
