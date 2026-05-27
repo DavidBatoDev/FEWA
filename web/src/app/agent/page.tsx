@@ -31,6 +31,8 @@ type ConvoStartResponse = {
   agent_uid: string;
   user_uid: string;
   channel_name: string;
+  lead_id: string;
+  conversation_id: string;
   user_token: string;
   status: string;
 };

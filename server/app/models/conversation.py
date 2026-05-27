@@ -11,6 +11,8 @@ class TranscriptEntry(BaseModel):
 class Conversation(BaseModel):
     type: str = "conversation"
     lead_id: str
+    session_context: Optional[dict[str, str]] = None
+    processed_turn_keys: list[str] = []
     transcript: list[TranscriptEntry] = []
     summary: Optional[str] = None
     objections: list[str] = []
