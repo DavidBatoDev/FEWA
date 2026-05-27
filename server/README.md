@@ -40,6 +40,9 @@ Fill in:
 - `AGORA_CONVO_DEFAULT_TTS_VOICE`
 - `AGORA_CONVO_DEFAULT_IDLE_TIMEOUT`
 
+Hackathon tip for teammate-safe isolation:
+- Use a personal scope value (example: `COUCHBASE_SCOPE=sales_agent_augus`) so your test traffic does not mix with your teammate's data.
+
 Where to get Agora keys:
 - Open Agora Console -> `Projects` -> your project -> `Configure`.
 - Copy `App ID` into `AGORA_APP_ID`.

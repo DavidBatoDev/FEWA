@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from couchbase.exceptions import CouchbaseException
 
-from app.config import settings
 from app.db.couchbase import get_scope
 from app.models.lead import Lead
 
@@ -33,19 +31,6 @@ DEFAULT_OFFERS: list[dict[str, Any]] = [
         "pain_points": ["complex process", "need integration", "custom crm"],
     },
 ]
-
-_offers_cache: list[dict[str, Any]] = []
-_offers_cache_expires_at = 0.0
-
-
-def _cache_ttl_seconds() -> int:
-    configured = getattr(settings, "offers_cache_ttl_seconds", 300)
-    try:
-        ttl = int(configured)
-    except (TypeError, ValueError):
-        ttl = 300
-    return max(1, ttl)
-
 
 def _to_clean_str(val: object) -> str:
     if val is None:
@@ -101,56 +86,21 @@ def _fetch_offers_from_db() -> list[dict[str, Any]]:
     return normalized
 
 
-def _log_fallback(event: str, reason: str) -> None:
-    print(f"[offer_recommender] {event}: {reason}")
-
-
 def _get_offer_rules() -> list[dict[str, Any]]:
-    global _offers_cache, _offers_cache_expires_at
-
-    now = time.time()
-    if _offers_cache and now < _offers_cache_expires_at:
-        return _offers_cache
-
     try:
         fetched = _fetch_offers_from_db()
     except CouchbaseException as exc:
-        if _offers_cache:
-            _log_fallback("db_fetch_failed", str(exc))
-            _log_fallback("using_last_good_cache", "offers cache retained")
-            _offers_cache_expires_at = now + _cache_ttl_seconds()
-            return _offers_cache
-        _log_fallback("db_fetch_failed", str(exc))
-        _log_fallback("empty_offers_fallback", "using default offers")
-        _offers_cache = list(DEFAULT_OFFERS)
-        _offers_cache_expires_at = now + _cache_ttl_seconds()
-        return _offers_cache
+        print(f"[offer_recommender] db_fetch_failed: {exc}")
+        return list(DEFAULT_OFFERS)
     except Exception as exc:
-        if _offers_cache:
-            _log_fallback("db_fetch_failed", str(exc))
-            _log_fallback("using_last_good_cache", "offers cache retained")
-            _offers_cache_expires_at = now + _cache_ttl_seconds()
-            return _offers_cache
-        _log_fallback("db_fetch_failed", str(exc))
-        _log_fallback("empty_offers_fallback", "using default offers")
-        _offers_cache = list(DEFAULT_OFFERS)
-        _offers_cache_expires_at = now + _cache_ttl_seconds()
-        return _offers_cache
+        print(f"[offer_recommender] db_fetch_failed: {exc}")
+        return list(DEFAULT_OFFERS)
 
     if not fetched:
-        if _offers_cache:
-            _log_fallback("empty_offers_fallback", "db returned empty offers set")
-            _log_fallback("using_last_good_cache", "offers cache retained")
-            _offers_cache_expires_at = now + _cache_ttl_seconds()
-            return _offers_cache
-        _log_fallback("empty_offers_fallback", "db returned empty offers set; using defaults")
-        _offers_cache = list(DEFAULT_OFFERS)
-        _offers_cache_expires_at = now + _cache_ttl_seconds()
-        return _offers_cache
+        print("[offer_recommender] empty_offers_fallback: db returned empty offers set")
+        return list(DEFAULT_OFFERS)
 
-    _offers_cache = fetched
-    _offers_cache_expires_at = now + _cache_ttl_seconds()
-    return _offers_cache
+    return fetched
 
 
 def recommend_offer(lead: Lead) -> str:
