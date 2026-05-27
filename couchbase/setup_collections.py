@@ -22,7 +22,16 @@ PASSWORD = os.getenv("COUCHBASE_PASSWORD", "")
 BUCKET_NAME = os.getenv("COUCHBASE_BUCKET", "workflow_ph")
 SCOPE_NAME = os.getenv("COUCHBASE_SCOPE", "sales_agent")
 
-COLLECTIONS = ["campaigns", "leads", "conversations", "offers", "follow_ups"]
+COLLECTIONS = [
+    "campaigns",
+    "leads",
+    "conversations",
+    "offers",
+    "follow_ups",
+    "intake_forms",
+    "lead_context_docs",
+    "discovery_calls",
+]
 
 INDEXES = [
     f"CREATE PRIMARY INDEX IF NOT EXISTS ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`leads`",
@@ -35,6 +44,16 @@ INDEXES = [
     f"CREATE INDEX IF NOT EXISTS idx_followups_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(lead_id)",
     f"CREATE INDEX IF NOT EXISTS idx_followups_lead_latest ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(lead_id, created_at DESC)",
     f"CREATE INDEX IF NOT EXISTS idx_followups_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`follow_ups`(created_at)",
+    f"CREATE INDEX IF NOT EXISTS idx_intake_forms_created_at ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`intake_forms`(created_at)",
+    f"CREATE INDEX IF NOT EXISTS idx_intake_forms_email ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`intake_forms`(email)",
+    f"CREATE INDEX IF NOT EXISTS idx_intake_forms_status ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`intake_forms`(status)",
+    f"CREATE INDEX IF NOT EXISTS idx_intake_forms_lead_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`intake_forms`(lead_id)",
+    f"CREATE INDEX IF NOT EXISTS idx_context_docs_lead_created ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`lead_context_docs`(lead_id, created_at DESC)",
+    f"CREATE INDEX IF NOT EXISTS idx_context_docs_status ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`lead_context_docs`(extraction_status)",
+    f"CREATE INDEX IF NOT EXISTS idx_discovery_calls_lead_created ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`discovery_calls`(lead_id, created_at DESC)",
+    f"CREATE INDEX IF NOT EXISTS idx_discovery_calls_status ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`discovery_calls`(status)",
+    f"CREATE INDEX IF NOT EXISTS idx_discovery_calls_slot_start ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`discovery_calls`(slot_start)",
+    f"CREATE INDEX IF NOT EXISTS idx_discovery_calls_conversation_id ON `{BUCKET_NAME}`.`{SCOPE_NAME}`.`discovery_calls`(conversation_id)",
 ]
 
 

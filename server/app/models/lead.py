@@ -20,6 +20,10 @@ class Lead(BaseModel):
     budget_readiness: Optional[str] = None
     decision_maker: Optional[str] = None
     buying_intent: Optional[str] = None
+    intake_form_id: Optional[str] = None
+    call_status: Optional[str] = None
+    call_slot: Optional[str] = None
+    context_status: Optional[str] = None
     conversation_summary: Optional[str] = None
     objections: list[str] = []
     buying_signals: list[str] = []
@@ -46,6 +50,10 @@ class LeadUpdate(BaseModel):
     budget_readiness: Optional[str] = None
     decision_maker: Optional[str] = None
     buying_intent: Optional[str] = None
+    intake_form_id: Optional[str] = None
+    call_status: Optional[str] = None
+    call_slot: Optional[str] = None
+    context_status: Optional[str] = None
     asked_for_proposal: Optional[bool] = None
     score_breakdown: Optional[dict] = None
     status: Optional[LeadStatus] = None

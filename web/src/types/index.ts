@@ -15,6 +15,10 @@ export interface Lead {
   budget_readiness: string | null;
   decision_maker: string | null;
   buying_intent: string | null;
+  intake_form_id: string | null;
+  call_status: string | null;
+  call_slot: string | null;
+  context_status: string | null;
   conversation_summary: string | null;
   objections: string[];
   buying_signals: string[];

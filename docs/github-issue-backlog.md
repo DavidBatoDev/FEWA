@@ -109,3 +109,26 @@ Body:
 - Add integration tests for `/agent/message`, `/leads/{id}`, and `/dashboard/stats` response contracts before hackathon demo freeze.
 Assignee: `@<qa-teammate>`
 Label: `qa`
+
+## B2B Data Foundation (P0)
+
+### 15) [Backend] Add B2B intake form collection and create endpoint
+Body:
+- Create `intake_forms` collection (`intake::{id}`) with `company_name`, `company_description`, `email`, `pain_points`, `status`, `created_at`, `updated_at`, plus indexes for `created_at`, `email`, and `status`.
+- Add `POST /intake-forms` that saves raw form input and creates/links a lead record for the B2B sales flow.
+Assignee: `@<backend-teammate>`
+Label: `backend`
+
+### 16) [Backend] Add lead context document store for optional PDF extraction
+Body:
+- Create `lead_context_docs` collection (`context::{id}`) linked by `lead_id`, with `source_type`, `extraction_status`, raw payload, and extracted summary/fields for teammate PDF integration.
+- Add `POST /leads/{lead_id}/context-docs` and `GET /leads/{lead_id}/context-docs` with status lifecycle support (`pending`, `processed`, `failed`).
+Assignee: `@<backend-teammate>`
+Label: `backend`
+
+### 17) [Backend] Add discovery call booking collection and lead linkage
+Body:
+- Create `discovery_calls` collection (`discovery_call::{id}`) linked to `lead_id` (and optional `conversation_id`) with slot, timezone, status lifecycle, and booking timestamps.
+- Add `POST /leads/{lead_id}/book-call` and `GET /leads/{lead_id}/book-calls`, and mirror latest call summary to lead fields (`call_status`, `call_slot`, `next_best_action`).
+Assignee: `@<backend-teammate>`
+Label: `backend`
