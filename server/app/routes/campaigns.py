@@ -1,11 +1,15 @@
 import re
+import os
+import shutil
+import tempfile
 from datetime import datetime, timezone
 
 from couchbase.exceptions import CouchbaseException, DocumentExistsException, DocumentNotFoundException
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from app.db.couchbase import get_collection, get_scope
 from app.models.campaign import Campaign, CampaignCreate
+from app.services.pdf_extractor import extract_text_from_pdf, extract_business_data_from_text
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -19,6 +23,42 @@ def now_iso() -> str:
 def slugify_campaign_name(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug
+
+
+@router.post("/extract-doc")
+async def extract_campaign_doc(file: UploadFile = File(...)):
+    """Extract text and summary from an uploaded document for campaign context."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported currently")
+
+    # Save to temp file
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, f"campaign_{datetime.now().timestamp()}_{file.filename}")
+    
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # 1. Extract text
+        text = extract_text_from_pdf(temp_path)
+        if not text:
+            raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+            
+        # 2. Extract AI summary
+        extraction = await extract_business_data_from_text(text)
+        
+        return {
+            "filename": file.filename,
+            "text": text,
+            "summary": extraction.get("summary", ""),
+            "fields": extraction.get("fields", {})
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+    finally:
+        # Cleanup
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 @router.post("")

@@ -51,6 +51,8 @@ class ConvoStartRequest(BaseModel):
     tts_voice: str | None = None
     audio_scenario: str | None = None
     token_ttl_seconds: int = DEFAULT_TTL_SECONDS
+    knowledge: str | None = None
+    flow: str | None = None
 
 
 class ConvoUserTokenRequest(BaseModel):
@@ -268,7 +270,17 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             detail="audio_scenario must be one of: default, chorus, aiserver",
         )
 
-    system_prompt = get_system_prompt(get_active_flow())
+    system_prompt = get_system_prompt(req.flow or get_active_flow())
+    
+    system_messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+    
+    if req.knowledge:
+        system_messages.append({
+            "role": "system", 
+            "content": f"The following is additional business context, product catalogs, or sales guidelines for this campaign:\n\n{req.knowledge}"
+        })
 
     return {
         "channel": _validate_channel_name(req.channel_name),
@@ -294,9 +306,7 @@ def _build_join_properties(req: ConvoStartRequest, agent_token: str, user_uid: s
             }
         },
         "llm": {
-            "system_messages": [
-                {"role": "system", "content": system_prompt}
-            ],
+            "system_messages": system_messages,
         },
     }
 
